@@ -24,3 +24,27 @@ VOR_BASELINE_COUNTS = {
     "K": 12,
     "DST": 12,
 }
+
+# FantasyPros CSV file name patterns (use .format(year=YYYY))
+FILE_PATTERNS = {
+    "rankings": "FantasyPros_{year}_Draft_ALL_Rankings.csv",
+    "qb": "FantasyPros_Fantasy_Football_Projections_QB.csv",
+    "flex": "FantasyPros_Fantasy_Football_Projections_FLX.csv",
+    "k": "FantasyPros_Fantasy_Football_Projections_K.csv",
+    "dst": "FantasyPros_Fantasy_Football_Projections_DST.csv",
+}
+
+# Column name mappings for files with duplicate headers
+QB_COLUMNS = [
+    "Player", "Team",
+    "Pass_Att", "Pass_Cmp", "Pass_Yds", "Pass_TD", "Pass_Int",
+    "Rush_Att", "Rush_Yds", "Rush_TD",
+    "FL", "FPTS",
+]
+
+FLEX_COLUMNS = [
+    "Player", "Team", "POS",
+    "Rush_Att", "Rush_Yds", "Rush_TD",
+    "Rec", "Rec_Yds", "Rec_TD",
+    "FL", "FPTS",
+]
