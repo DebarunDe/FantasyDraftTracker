@@ -1,7 +1,6 @@
 """Tests for the FantasyPros CSV ingestion module."""
 
 import textwrap
-from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -10,16 +9,8 @@ from src.data_pipeline.ingestion import FantasyProsIngester, IngestionError
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures (ingester comes from conftest.py)
 # ---------------------------------------------------------------------------
-
-DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "2025"
-
-
-@pytest.fixture
-def ingester():
-    """Ingester pointing at the real 2025 data directory."""
-    return FantasyProsIngester(DATA_DIR, year=2025)
 
 
 @pytest.fixture
