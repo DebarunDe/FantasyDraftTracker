@@ -63,6 +63,10 @@ _POSITION_ALIASES = {
 # Regex: one or more letters followed by optional digits
 _POS_PATTERN = re.compile(r"^([A-Za-z]+?)(\d+)?$")
 
+# Name suffixes stripped during normalization for cross-file matching.
+# Order matters: longer suffixes first to avoid partial matches (e.g. "III" before "II").
+_NAME_SUFFIX_PATTERN = re.compile(r"\s+(?:Jr\.|Sr\.|III|II|IV|V)$")
+
 
 class DataCleaner:
     """Cleans and standardizes FantasyPros data for cross-file merging."""
@@ -143,8 +147,10 @@ class DataCleaner:
         """Normalize a player name for consistent cross-file matching.
 
         - Strips quotes and extra whitespace
-        - Preserves suffixes (Jr., III, etc.)
         - Standardizes apostrophes and hyphens
+        - Preserves suffixes (Jr., III, etc.) to avoid merging
+          different players who share a base name (e.g. Marvin Harrison
+          vs Marvin Harrison Jr.)
         """
         if pd.isna(name):
             return None
@@ -166,6 +172,21 @@ class DataCleaner:
         name = " ".join(name.split())
 
         return name
+
+    @staticmethod
+    def strip_name_suffix(name: str) -> Optional[str]:
+        """Strip name suffixes (Jr., Sr., III, II, IV, V) from a
+        normalized name.  Used as a fallback key for merging when an
+        exact match fails.
+
+        Examples:
+            "James Cook III"     -> "James Cook"
+            "Marvin Harrison Jr." -> "Marvin Harrison"
+            "Ja'Marr Chase"      -> "Ja'Marr Chase"  (no change)
+        """
+        if pd.isna(name) or name is None:
+            return None
+        return _NAME_SUFFIX_PATTERN.sub("", str(name))
 
     # ------------------------------------------------------------------
     # DataFrame-level cleaning

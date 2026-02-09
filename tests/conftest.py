@@ -7,6 +7,7 @@ import pytest
 from src.data_pipeline.cleaning import DataCleaner
 from src.data_pipeline.ingestion import FantasyProsIngester
 from src.data_pipeline.transformation import DataTransformer
+from src.data_pipeline.vor_calculation import VORCalculator
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "2025"
 
@@ -24,7 +25,7 @@ def pytest_collection_modifyitems(items):
     fixture which reads from DATA_DIR (ingester, cleaned_data, etc.)."""
     data_fixtures = {
         "ingester", "cleaned_data", "merged_projections",
-        "projections_with_scoring",
+        "projections_with_scoring", "transformed_data",
     }
     for item in items:
         if data_fixtures & set(item.fixturenames):
@@ -77,3 +78,14 @@ def merged_projections(transformer, cleaned_data):
 def projections_with_scoring(transformer, merged_projections):
     """Merged projections with scoring variants calculated."""
     return transformer.calculate_scoring_variants(merged_projections)
+
+
+@pytest.fixture(scope="module")
+def transformed_data(transformer, cleaned_data):
+    """Full transform output (merge + scoring + rankings + player IDs)."""
+    return transformer.transform(cleaned_data)
+
+
+@pytest.fixture(scope="module")
+def vor_calculator():
+    return VORCalculator()
