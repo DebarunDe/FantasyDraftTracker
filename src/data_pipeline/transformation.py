@@ -12,6 +12,8 @@ import math
 
 import pandas as pd
 
+from src.data_pipeline.cleaning import DataCleaner  # noqa: F401 – used for strip_name_suffix
+
 logger = logging.getLogger(__name__)
 
 # Sentinel values for players missing from the rankings file
@@ -165,9 +167,16 @@ class DataTransformer:
     ) -> pd.DataFrame:
         """Merge projections with rankings data (overall rank, bye week, tier).
 
-        Joins on (Player_Norm, Position) to handle players who play
-        multiple positions safely.
+        Uses a two-pass strategy to handle inconsistent name suffixes
+        (e.g. "James Cook III" in projections vs "James Cook" in rankings)
+        without risking incorrect merges for distinct players who share
+        a base name (e.g. Marvin Harrison vs Marvin Harrison Jr.).
+
+        Pass 1: Exact match on (Player_Norm, Position).
+        Pass 2: For still-unmatched rows, match on suffix-stripped name.
         """
+        strip = DataCleaner.strip_name_suffix
+
         # Columns to pull from rankings
         rank_cols = [
             "Player_Norm", "Position", "RK", "Pos_Rank",
@@ -181,12 +190,69 @@ class DataTransformer:
             subset=["Player_Norm", "Position"], keep="first"
         )
 
+        # Columns that the merge will add (used to detect matched rows)
+        rank_value_cols = [c for c in rank_subset.columns
+                          if c not in ("Player_Norm", "Position")]
+
+        # --- Pass 1: exact match ---
         merged = projections_df.merge(
             rank_subset,
             on=["Player_Norm", "Position"],
             how="left",
             validate="m:1",
         )
+
+        # Identify rows that didn't match (RK is null)
+        unmatched = merged["RK"].isna() if "RK" in merged.columns else pd.Series(True, index=merged.index)
+        n_pass1 = (~unmatched).sum()
+
+        # --- Pass 2: suffix-stripped fallback for unmatched rows ---
+        if unmatched.any():
+            # Build suffix-stripped keys for unmatched projections
+            unmatched_df = merged.loc[unmatched].copy()
+            unmatched_df["_base_name"] = unmatched_df["Player_Norm"].apply(strip)
+
+            # Build suffix-stripped keys for rankings (only rows not
+            # already consumed by pass 1)
+            matched_rank_keys = set(
+                zip(
+                    merged.loc[~unmatched, "Player_Norm"],
+                    merged.loc[~unmatched, "Position"],
+                )
+            )
+            rank_remaining = rank_subset[
+                ~rank_subset.apply(
+                    lambda r: (r["Player_Norm"], r["Position"]) in matched_rank_keys,
+                    axis=1,
+                )
+            ].copy()
+            rank_remaining["_base_name"] = rank_remaining["Player_Norm"].apply(strip)
+            rank_remaining = rank_remaining.drop_duplicates(
+                subset=["_base_name", "Position"], keep="first"
+            )
+
+            # Drop pass-1 rank columns from unmatched rows before re-merging
+            unmatched_df = unmatched_df.drop(columns=rank_value_cols, errors="ignore")
+
+            fallback = unmatched_df.merge(
+                rank_remaining.drop(columns=["Player_Norm"]).rename(
+                    columns={"_base_name": "_base_name"}
+                ),
+                on=["_base_name", "Position"],
+                how="left",
+            )
+
+            n_pass2 = fallback["RK"].notna().sum() if "RK" in fallback.columns else 0
+            if n_pass2:
+                logger.info(
+                    "Suffix-stripped fallback matched %d additional player(s)", n_pass2
+                )
+
+            # Drop helper column and splice back
+            fallback = fallback.drop(columns=["_base_name"])
+            merged = pd.concat(
+                [merged.loc[~unmatched], fallback], ignore_index=True
+            )
 
         # Rename for clarity
         rename_map = {
@@ -205,9 +271,10 @@ class DataTransformer:
         if "Tier" in merged.columns:
             merged["Tier"] = merged["Tier"].fillna(UNRANKED_TIER).astype(int)
 
+        total_matched = merged["Overall_Rank"].ne(UNRANKED_OVERALL).sum() if "Overall_Rank" in merged.columns else 0
         logger.info(
-            "Merged with rankings: %d matched, %d unmatched",
-            merged["Overall_Rank"].ne(UNRANKED_OVERALL).sum() if "Overall_Rank" in merged.columns else 0,
+            "Merged with rankings: %d matched (%d exact, %d fallback), %d unmatched",
+            total_matched, n_pass1, total_matched - n_pass1,
             merged["Overall_Rank"].eq(UNRANKED_OVERALL).sum() if "Overall_Rank" in merged.columns else len(merged),
         )
         return merged

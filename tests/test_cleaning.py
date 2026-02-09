@@ -109,7 +109,21 @@ class TestNormalizePlayerName:
         assert cleaner.normalize_player_name("") is None
 
     def test_suffix_preserved(self, cleaner):
+        """normalize_player_name keeps suffixes; strip_name_suffix removes them."""
         assert cleaner.normalize_player_name("Odell Beckham Jr.") == "Odell Beckham Jr."
+        assert cleaner.normalize_player_name("James Cook III") == "James Cook III"
+        assert cleaner.normalize_player_name("Patrick Mahomes II") == "Patrick Mahomes II"
+
+    def test_strip_name_suffix(self, cleaner):
+        assert cleaner.strip_name_suffix("Odell Beckham Jr.") == "Odell Beckham"
+        assert cleaner.strip_name_suffix("James Cook III") == "James Cook"
+        assert cleaner.strip_name_suffix("Patrick Mahomes II") == "Patrick Mahomes"
+        assert cleaner.strip_name_suffix("Aaron Jones Sr.") == "Aaron Jones"
+        assert cleaner.strip_name_suffix("Stetson Bennett IV") == "Stetson Bennett"
+        assert cleaner.strip_name_suffix("David Sills V") == "David Sills"
+        # No suffix — unchanged
+        assert cleaner.strip_name_suffix("Ja'Marr Chase") == "Ja'Marr Chase"
+        assert cleaner.strip_name_suffix(None) is None
 
     def test_hyphenated_name(self, cleaner):
         assert cleaner.normalize_player_name("Amon-Ra St. Brown") == "Amon-Ra St. Brown"
