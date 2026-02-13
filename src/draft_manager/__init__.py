@@ -8,6 +8,7 @@ from src.draft_manager.draft_state import (
     TeamRoster,
 )
 from src.draft_manager.roster_validator import RosterValidator
+from src.draft_manager.state_persistence import StatePersistence
 
 __all__ = [
     "DraftController",
@@ -17,6 +18,7 @@ __all__ = [
     "LeagueConfig",
     "Pick",
     "RosterValidator",
+    "StatePersistence",
     "TeamRoster",
     "ValidationError",
 ]
