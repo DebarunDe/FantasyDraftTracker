@@ -27,6 +27,12 @@ class TeamRoster:
         self.roster[slot].append(player_id)
         self.picks.append(player_id)
 
+    def remove_player(self, player_id: str, slot: str):
+        """Remove player from roster at the given slot (for rollback)."""
+        if slot in self.roster:
+            self.roster[slot].remove(player_id)
+        self.picks.remove(player_id)
+
     def get_total_picks(self) -> int:
         """Total number of picks made."""
         return len(self.picks)
@@ -41,15 +47,24 @@ class Pick:
     team_id: int
     player_id: str
     timestamp: str
+    slot: Optional[str] = None  # Roster slot assigned (QB, RB, FLEX, BENCH, etc.)
 
     @classmethod
-    def create(cls, pick_number: int, round: int, team_id: int, player_id: str):
+    def create(
+        cls,
+        pick_number: int,
+        round: int,
+        team_id: int,
+        player_id: str,
+        slot: Optional[str] = None,
+    ):
         return cls(
             pick_number=pick_number,
             round=round,
             team_id=team_id,
             player_id=player_id,
             timestamp=datetime.now().isoformat(),
+            slot=slot,
         )
 
 
