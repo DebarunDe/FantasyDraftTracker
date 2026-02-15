@@ -6,14 +6,16 @@ MC_PARALLEL_WORKERS = 4  # CPU cores for parallel simulation
 # VOR calculation parameters
 POSITION_SCARCITY_WEIGHTS = {
     "QB": 1.2,
-    "RB": 2.0,
-    "WR": 1.8,
+    "RB": 1.5,
+    "WR": 1.5,
     "TE": 1.5,
-    "K": 1.0,
-    "DST": 1.0,
+    "K": 0.5,
+    "DST": 0.5,
 }
 
-ROSTER_NEED_WEIGHT = 0.5  # How much to weight positional needs
+ROSTER_NEED_WEIGHT = 0.5  # Boost for unfilled starting slots
+ROSTER_FILLED_PENALTY = 0.3  # Penalty when all starting slots are filled (bench-only)
+ROSTER_EXCESS_PENALTY = 0.1  # Further penalty per extra player beyond starters
 
 # Computer drafter parameters
 COMPUTER_STRATEGY = "fast"  # "optimal", "fast", "balanced"

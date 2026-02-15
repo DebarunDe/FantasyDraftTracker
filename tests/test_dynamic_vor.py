@@ -130,12 +130,12 @@ class TestScarcityMultiplier:
         qb_scarcity = self.calc._calculate_scarcity_multiplier("QB", drafted_count=6)   # 6/12
         assert rb_scarcity > qb_scarcity
 
-    def test_wr_higher_weight_than_te_at_equal_pct(self):
-        """At the same drafted percentage, WR weight (1.8) > TE weight (1.5)."""
+    def test_wr_equal_weight_to_te_at_equal_pct(self):
+        """At the same drafted percentage, WR weight (1.5) == TE weight (1.5)."""
         # 50% drafted at each position
         wr_scarcity = self.calc._calculate_scarcity_multiplier("WR", drafted_count=18)  # 18/36
         te_scarcity = self.calc._calculate_scarcity_multiplier("TE", drafted_count=6)   # 6/12
-        assert wr_scarcity > te_scarcity
+        assert wr_scarcity == te_scarcity
 
     def test_k_and_dst_have_equal_weight(self):
         k_scarcity = self.calc._calculate_scarcity_multiplier("K", drafted_count=5)
@@ -151,10 +151,10 @@ class TestScarcityMultiplier:
 
     def test_specific_values(self):
         """Verify formula: 1 + (drafted_pct * weight)."""
-        # RB: weight=2.0, baseline=36
-        # 18 drafted: pct = 18/36 = 0.5, scarcity = 1 + 0.5*2.0 = 2.0
+        # RB: weight=1.5, baseline=36
+        # 18 drafted: pct = 18/36 = 0.5, scarcity = 1 + 0.5*1.5 = 1.75
         result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=18)
-        assert result == pytest.approx(2.0)
+        assert result == pytest.approx(1.75)
 
         # QB: weight=1.2, baseline=12
         # 6 drafted: pct = 6/12 = 0.5, scarcity = 1 + 0.5*1.2 = 1.6
@@ -189,12 +189,13 @@ class TestNeedMultiplier:
 
         assert need_filled < need_empty
 
-    def test_fully_filled_gives_one(self):
-        """When all slots filled, need multiplier is 1.0."""
+    def test_fully_filled_gives_penalty(self):
+        """When all slots filled, need multiplier penalizes (< 1.0)."""
         roster = self._empty_roster()
         roster["QB"] = ["qb1"]  # QB has 1 slot
         result = self.calc._calculate_need_multiplier("QB", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1.0)
+        # Filled: need = 1 - ROSTER_FILLED_PENALTY = 1 - 0.3 = 0.7
+        assert result == pytest.approx(0.7)
 
     def test_flex_eligible_includes_flex_slot(self):
         """RB/WR/TE need includes the FLEX slot."""
@@ -243,13 +244,48 @@ class TestNeedMultiplier:
         result = self.calc._calculate_need_multiplier("RB", roster, DEFAULT_ROSTER_SLOTS)
         assert result == pytest.approx(1 + (2 / 3) * 0.5)
 
-    def test_zero_total_slots_returns_one(self):
-        """Position with no slots in config returns 1.0."""
+    def test_zero_total_slots_returns_penalty(self):
+        """Position with no slots in config returns penalized value."""
         roster = self._empty_roster()
         slots = {**DEFAULT_ROSTER_SLOTS}
         del slots["K"]
         result = self.calc._calculate_need_multiplier("K", roster, slots)
-        assert result == 1.0
+        # No slots at all: 1 - ROSTER_FILLED_PENALTY = 0.7
+        assert result == pytest.approx(0.7)
+
+    def test_excess_players_increase_penalty(self):
+        """Drafting beyond starting slots increases penalty progressively."""
+        roster = self._empty_roster()
+        roster["K"] = ["k1"]  # K slot filled (1/1)
+        need_first_extra = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+
+        roster["K"] = ["k1", "k2"]  # 2 Ks, only 1 slot (1 excess)
+        need_second_extra = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+
+        # Both should be < 1.0 (penalized)
+        assert need_first_extra < 1.0
+        assert need_second_extra < 1.0
+        # More excess = more penalty
+        assert need_second_extra < need_first_extra
+
+    def test_penalty_floors_at_minimum(self):
+        """Need multiplier never drops below 0.1."""
+        roster = self._empty_roster()
+        # Extreme: 10 Ks drafted to a 1-slot position
+        roster["K"] = [f"k{i}" for i in range(10)]
+        result = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+        assert result >= 0.1
+
+    def test_filled_k_penalizes_vs_unfilled_wr(self):
+        """A team with K filled should value WR much higher than another K."""
+        roster = self._empty_roster()
+        roster["K"] = ["k1"]
+        k_need = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+        wr_need = self.calc._calculate_need_multiplier("WR", roster, DEFAULT_ROSTER_SLOTS)
+        # WR has 3 empty slots → boosted; K is filled → penalized
+        assert wr_need > k_need
+        assert wr_need > 1.0
+        assert k_need < 1.0
 
 
 # ── Position Slot Counting Tests ─────────────────────────────────────
@@ -643,19 +679,19 @@ class TestFormulaVerification:
             team_roster=roster,
         )
 
-        # Henry: scarcity = 1 + (15/36)*2.0 ≈ 1.833
+        # Henry: scarcity = 1 + (15/36)*1.5 ≈ 1.625
         henry_r = result["henry"]
-        assert henry_r.scarcity_multiplier == pytest.approx(1 + (15 / 36) * 2.0)
+        assert henry_r.scarcity_multiplier == pytest.approx(1 + (15 / 36) * 1.5)
         # Henry: need = 1 + (2/3)*0.5 = 1.333 (1 of 3 slots filled)
         assert henry_r.need_multiplier == pytest.approx(1 + (2 / 3) * 0.5)
 
-        # Wilson: scarcity = 1 + (10/36)*1.8 = 1.5
+        # Wilson: scarcity = 1 + (10/36)*1.5 ≈ 1.417
         wilson_r = result["wilson"]
-        assert wilson_r.scarcity_multiplier == pytest.approx(1 + (10 / 36) * 1.8)
+        assert wilson_r.scarcity_multiplier == pytest.approx(1 + (10 / 36) * 1.5)
         # Wilson: same need (1 of 3 slots filled)
         assert wilson_r.need_multiplier == pytest.approx(1 + (2 / 3) * 0.5)
 
-        # Henry should have higher dynamic VOR
+        # Henry should have higher dynamic VOR (higher base VOR)
         assert henry_r.dynamic_vor > wilson_r.dynamic_vor
 
     def test_dynamic_vor_equals_product(self):

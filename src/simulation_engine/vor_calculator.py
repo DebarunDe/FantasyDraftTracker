@@ -8,7 +8,12 @@ import logging
 from typing import Dict, List
 
 from src.data_pipeline.config import VOR_BASELINE_COUNTS
-from src.simulation_engine.config import POSITION_SCARCITY_WEIGHTS, ROSTER_NEED_WEIGHT
+from src.simulation_engine.config import (
+    POSITION_SCARCITY_WEIGHTS,
+    ROSTER_NEED_WEIGHT,
+    ROSTER_FILLED_PENALTY,
+    ROSTER_EXCESS_PENALTY,
+)
 from src.simulation_engine.models import VORResult
 
 logger = logging.getLogger(__name__)
@@ -23,8 +28,9 @@ class DynamicVORCalculator:
 
     * **Scarcity** — as more players at a position are drafted, remaining
       players at that position become more valuable.
-    * **Roster need** — unfilled roster slots for a position boost VOR for
-      that position on a per-team basis.
+    * **Roster need** — unfilled starting slots boost VOR; filled starting
+      slots penalize VOR to discourage drafting excess players at positions
+      where the team is already stocked (especially K/DST).
 
     The calculator is stateless: all data is passed in via method arguments.
     """
@@ -179,18 +185,36 @@ class DynamicVORCalculator:
     ) -> float:
         """Roster-need multiplier for a single team.
 
-        Formula::
+        Three-tier formula:
 
-            need = 1 + (empty_slots / total_slots) * ROSTER_NEED_WEIGHT
+        1. **Empty starting slots**: boost VOR to prioritize filling starters.
+           ``need = 1 + (empty / total) * ROSTER_NEED_WEIGHT``
+
+        2. **All starters filled**: penalize to discourage bench-only picks.
+           ``need = 1 - ROSTER_FILLED_PENALTY``
+
+        3. **Excess beyond starters**: further penalize each extra player.
+           ``need = 1 - ROSTER_FILLED_PENALTY - (excess * ROSTER_EXCESS_PENALTY)``
 
         For FLEX-eligible positions (RB, WR, TE) the FLEX slot is included
         in both the filled and total counts.
         """
         filled, total = self._count_position_slots(position, team_roster, roster_slots)
+
         if total == 0:
-            return 1.0
-        empty = max(total - filled, 0)
-        return 1.0 + (empty / total) * ROSTER_NEED_WEIGHT
+            # No slots for this position at all — heavy penalty
+            return max(1.0 - ROSTER_FILLED_PENALTY, 0.1)
+
+        empty = total - filled
+
+        if empty > 0:
+            # Still have starting slots to fill — boost
+            return 1.0 + (empty / total) * ROSTER_NEED_WEIGHT
+
+        # All starting slots filled — penalize
+        excess = abs(empty)  # How many beyond starting capacity
+        penalty = ROSTER_FILLED_PENALTY + (excess * ROSTER_EXCESS_PENALTY)
+        return max(1.0 - penalty, 0.1)
 
     @staticmethod
     def _count_position_slots(
