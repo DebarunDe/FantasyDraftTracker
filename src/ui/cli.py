@@ -10,6 +10,7 @@ from src.draft_manager.draft_initializer import DraftInitializer
 from src.draft_manager.draft_rules import ValidationError
 from src.draft_manager.draft_state import DraftState
 from src.draft_manager.state_persistence import StatePersistence
+from src.simulation_engine.computer_drafter import ComputerDrafter
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.config import AVAILABLE_PLAYERS_DEFAULT_LIMIT, VOR_RECOMMENDATIONS_COUNT
 from src.ui.display import DraftDisplay
@@ -29,6 +30,7 @@ class DraftApp:
         self.draft_state: Optional[DraftState] = None
         self.controller: Optional[DraftController] = None
         self.vor_calculator: Optional[DynamicVORCalculator] = None
+        self.computer_drafter: Optional[ComputerDrafter] = None
         self.searcher: Optional[PlayerSearcher] = None
         self.last_displayed_players: List[Dict] = []
 
@@ -83,11 +85,15 @@ class DraftApp:
         )
 
     def _init_components(self) -> None:
-        """Initialize controller, VOR calculator, and searcher."""
+        """Initialize controller, VOR calculator, computer drafter, and searcher."""
         self.controller = DraftController(self.draft_state)
         self.vor_calculator = DynamicVORCalculator(
             self.draft_state.league_config.scoring_format,
             self.draft_state.league_config.league_size,
+        )
+        self.computer_drafter = ComputerDrafter(
+            vor_calculator=self.vor_calculator,
+            strategy="balanced",
         )
         self.searcher = PlayerSearcher(self.controller)
 
@@ -99,14 +105,33 @@ class DraftApp:
 
     def _handle_pick_turn(self) -> bool:
         """Handle a single pick turn. Returns False if user quit."""
-        self._show_draft_board()
+        current_team = self.draft_state.get_current_team()
 
+        if not current_team.is_human:
+            self._handle_computer_turn()
+            return True
+
+        # Human turn: show full board and wait for input
+        self._show_draft_board()
         player_id = self._get_user_pick()
         if player_id is None:
             return False
 
         self._execute_pick(player_id)
         return True
+
+    def _handle_computer_turn(self) -> None:
+        """Auto-pick for a computer team using the ADP-blended ComputerDrafter."""
+        current_team = self.draft_state.get_current_team()
+        self.console.print(
+            f"\n[dim]  {current_team.team_name} is on the clock...[/dim]"
+        )
+
+        available = self.controller.get_available_players()
+        player_id = self.computer_drafter.make_pick(
+            self.draft_state, available, current_team.team_id
+        )
+        self._execute_pick(player_id)
 
     def _show_draft_board(self) -> None:
         """Display current draft board."""
