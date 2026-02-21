@@ -7,7 +7,7 @@ from rich.console import Console
 
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_initializer import DraftInitializer
-from src.draft_manager.draft_rules import ValidationError
+from src.draft_manager.draft_rules import DraftRules, ValidationError
 from src.draft_manager.draft_state import DraftState
 from src.draft_manager.state_persistence import StatePersistence
 from src.simulation_engine.computer_drafter import ComputerDrafter
@@ -128,8 +128,23 @@ class DraftApp:
         )
 
         available = self.controller.get_available_players()
+
+        # Filter to players this team can legally draft (position limits respected).
+        # The VOR scores may rank a player highly even when that position slot is full.
+        rules = DraftRules(self.draft_state)
+        legal = [
+            p for p in available
+            if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+        ]
+
+        if not legal:
+            logger.warning(
+                "No legal picks for %s — roster may be full", current_team.team_name
+            )
+            return
+
         player_id = self.computer_drafter.make_pick(
-            self.draft_state, available, current_team.team_id
+            self.draft_state, legal, current_team.team_id
         )
         self._execute_pick(player_id)
 
