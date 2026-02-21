@@ -9,7 +9,7 @@ import logging
 
 import pandas as pd
 
-from src.data_pipeline.config import VOR_BASELINE_COUNTS
+from src.data_pipeline.config import calculate_baseline_count
 
 logger = logging.getLogger(__name__)
 
@@ -29,30 +29,31 @@ class VORCalculator:
 
         For each position and scoring format:
         1. Sort players by projected points (descending).
-        2. The replacement player is the one at index
-           ``VOR_BASELINE_COUNTS[position]`` (0-indexed, so this is
-           the first player *below* the baseline).
-        3. VOR = player_fpts - replacement_fpts.
+        2. Calculate league-size-dependent baseline count.
+        3. Average ±1 rank around baseline for robustness (Petersen method).
+        4. VOR = player_fpts - replacement_fpts.
 
         Negative VOR is preserved — it indicates a below-replacement player.
 
         Args:
             players_df: DataFrame with columns ``Position`` and
                 ``FPTS_Standard``, ``FPTS_HalfPPR``, ``FPTS_FullPPR``.
-            league_size: Number of teams (used only for logging).
+            league_size: Number of teams in the league.
 
         Returns:
             Copy of *players_df* with added columns
             ``VOR_Standard``, ``VOR_HalfPPR``, ``VOR_FullPPR``.
         """
         out = players_df.copy()
+        positions = out["Position"].unique()
 
         for fmt in _SCORING_FORMATS:
             fpts_col = f"FPTS_{fmt}"
             vor_col = f"VOR_{fmt}"
             out[vor_col] = 0.0
 
-            for position, baseline_count in VOR_BASELINE_COUNTS.items():
+            for position in positions:
+                baseline_count = calculate_baseline_count(position, league_size)
                 pos_mask = out["Position"] == position
                 pos_df = (
                     out.loc[pos_mask]
@@ -65,14 +66,18 @@ class VORCalculator:
 
                 # Replacement index: the first player outside the baseline
                 repl_idx = min(baseline_count, len(pos_df) - 1)
-                replacement_fpts = pos_df.iloc[repl_idx][fpts_col]
+
+                # Average ±1 rank for robustness (Petersen methodology)
+                repl_low = max(0, repl_idx - 1)
+                repl_high = min(len(pos_df) - 1, repl_idx + 1)
+                replacement_fpts = pos_df.iloc[repl_low:repl_high + 1][fpts_col].mean()
 
                 out.loc[pos_mask, vor_col] = (
                     out.loc[pos_mask, fpts_col] - replacement_fpts
                 )
 
                 logger.debug(
-                    "VOR %s %s: replacement=#%d (%.1f pts), range=[%.1f, %.1f]",
+                    "VOR %s %s: replacement=#%d (%.1f pts avg), range=[%.1f, %.1f]",
                     fmt, position, repl_idx + 1, replacement_fpts,
                     out.loc[pos_mask, vor_col].max(),
                     out.loc[pos_mask, vor_col].min(),

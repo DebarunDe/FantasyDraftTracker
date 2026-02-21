@@ -127,7 +127,7 @@ class TestCalculateBaselineVOR:
     def test_handles_fewer_players_than_baseline(self, vor_calculator):
         """If a position has fewer players than the baseline count,
         the last player is used as the replacement level."""
-        # Only 5 QBs, baseline is 12
+        # Only 5 QBs, baseline is 18 (1.5 * 12 teams)
         df = _make_players("QB", 5, base_fpts=300)
         # Need scoring variant columns
         result = vor_calculator.calculate_baseline_vor(df)
@@ -136,9 +136,10 @@ class TestCalculateBaselineVOR:
         top = result.sort_values("VOR_FullPPR", ascending=False).iloc[0]
         assert top["VOR_FullPPR"] > 0
 
-        # Last player = replacement, should have VOR ≈ 0
+        # Last player is used for replacement (with ±1 averaging),
+        # so it should be close to 0 (small negative due to averaging)
         last = result.sort_values("VOR_FullPPR", ascending=False).iloc[-1]
-        assert last["VOR_FullPPR"] == pytest.approx(0, abs=0.01)
+        assert last["VOR_FullPPR"] == pytest.approx(0, abs=5.0)
 
     def test_empty_position_skipped(self, vor_calculator):
         """Positions with no players should not cause errors."""
