@@ -57,11 +57,14 @@ class ComputerDrafter:
             adp_weight: Explicit blend weight; overrides the strategy default when
                         provided (0.0 = pure VOR, 1.0 = pure ADP).
         """
-        if strategy not in ADP_BLEND_STRATEGIES and adp_weight is None:
-            raise ValueError(
-                f"Unknown strategy '{strategy}'. "
-                f"Valid options: {list(ADP_BLEND_STRATEGIES.keys())}"
-            )
+        if strategy not in ADP_BLEND_STRATEGIES:
+            if adp_weight is None:
+                raise ValueError(
+                    f"Unknown strategy '{strategy}'. "
+                    f"Valid options: {list(ADP_BLEND_STRATEGIES.keys())}"
+                )
+            # Explicit adp_weight with unknown name — treat as a custom strategy
+            strategy = "custom"
         self.vor_calculator = vor_calculator
         self.strategy = strategy
         # Explicit adp_weight overrides the strategy default
@@ -109,12 +112,15 @@ class ComputerDrafter:
     ) -> Dict[str, float]:
         """Compute composite score for each available player.
 
-        Uses rank fusion: both VOR and ADP are normalized to [0, 1] before
-        blending so neither signal dominates by magnitude.
+        Uses rank fusion: both VOR and ADP are re-ranked within the available
+        pool and normalised to [0, 1] before blending, so neither signal
+        dominates by magnitude and scores are always in [0, 1].
 
         Formula:
-            vor_score  = 1 - (vor_rank - 1) / total_players   # 1.0 = best VOR
-            adp_score  = 1 - (adp_rank - 1) / total_players   # 1.0 = best ADP
+            vor_rank   = rank of player by dynamic_vor among available players
+            adp_rank   = rank of player by overall_rank among available players
+            vor_score  = 1 - (vor_rank - 1) / total   # 1.0 = best VOR
+            adp_score  = 1 - (adp_rank - 1) / total   # 1.0 = best ADP
             composite  = (1 - adp_weight) * vor_score + adp_weight * adp_score
 
         For "contrarian" strategy, ±noise is added after blending.
@@ -126,8 +132,25 @@ class ComputerDrafter:
         if total == 0:
             return {}
 
-        # Build VOR rank: sort by dynamic_vor descending → rank 1 = best VOR
-        vor_rank_map = self._rank_by_vor(vor_results)
+        # Re-rank VOR among only available players so the rank is always in
+        # [1, total] and vor_score stays in [0, 1].
+        available_ids = {p["player_id"] for p in available_players}
+        available_vor = {
+            pid: vor_results[pid] for pid in available_ids if pid in vor_results
+        }
+        vor_rank_map = self._rank_by_vor(available_vor)
+
+        # Re-rank ADP among available players for the same reason.  Global ECR
+        # (overall_rank) can be 300+ while the available pool may be only 50
+        # players; normalising by pool size produces correct [0, 1] scores.
+        sorted_by_adp = sorted(
+            available_players,
+            key=lambda p: p.get("overall_rank") or float("inf"),
+        )
+        adp_rank_map = {
+            p["player_id"]: rank
+            for rank, p in enumerate(sorted_by_adp, start=1)
+        }
 
         scores: Dict[str, float] = {}
         for player in available_players:
@@ -136,9 +159,7 @@ class ComputerDrafter:
             vor_rank = vor_rank_map.get(pid, total)
             vor_score = 1.0 - (vor_rank - 1) / total
 
-            # ADP signal: overall_rank (FantasyPros ECR, lower = better draft slot)
-            # Fall back to total (worst rank) if field is missing or zero
-            adp_rank = player.get("overall_rank") or total
+            adp_rank = adp_rank_map.get(pid, total)
             adp_score = 1.0 - (adp_rank - 1) / total
 
             composite = (

@@ -77,7 +77,7 @@ TIER_URGENCY_WEIGHT = 1.5
 # player JSON from the data pipeline. No new data source is needed.
 
 COMPUTER_STRATEGY            = "balanced"  # Default for all computer teams
-COMPUTER_PERSONALITY_VARIANCE = 0.05       # +/- 5% noise for vor_only/contrarian
+COMPUTER_PERSONALITY_VARIANCE = 0.05       # Reserved for future use
 
 # Default ADP blend weight (0.0 = pure VOR, 1.0 = pure ADP)
 COMPUTER_ADP_WEIGHT = 0.4    # 60% VOR + 40% ADP → realistic human-like drafting
@@ -89,7 +89,7 @@ ADP_BLEND_STRATEGIES = {
     "vor_only":   0.0,   # Pure dynamic VOR (optimal but RB-heavy)
     "balanced":   0.4,   # 60% VOR + 40% ADP (default — realistic)
     "consensus":  0.7,   # 30% VOR + 70% ADP (consensus follower)
-    "contrarian": 0.0,   # Pure VOR + noise=0.15 (exploits ADP inefficiencies)
+    "contrarian": 0.0,   # Pure VOR + ±15% uniform noise (exploits ADP inefficiencies)
 }
 
 # Performance tuning

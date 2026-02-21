@@ -53,7 +53,8 @@ class DraftApp:
             self.display.show_success("Draft is ready! Entering draft loop...")
             self.console.print()
 
-            self._draft_loop()
+            if self._draft_loop():
+                return  # User quit mid-draft — "Goodbye!" already printed
 
             if self.controller and self.controller.is_complete:
                 summary = self.controller.get_draft_summary()
@@ -98,19 +99,19 @@ class DraftApp:
         )
         self.searcher = PlayerSearcher(self.controller)
 
-    def _draft_loop(self) -> None:
-        """Main draft pick loop."""
+    def _draft_loop(self) -> bool:
+        """Main draft pick loop. Returns True if the user quit mid-draft."""
         while not self.controller.is_complete:
             if not self._handle_pick_turn():
-                break  # User quit
+                return True  # User quit
+        return False
 
     def _handle_pick_turn(self) -> bool:
         """Handle a single pick turn. Returns False if user quit."""
         current_team = self.draft_state.get_current_team()
 
         if not current_team.is_human:
-            self._handle_computer_turn()
-            return True
+            return self._handle_computer_turn()
 
         # Human turn: show full board and wait for input
         self._show_draft_board()
@@ -121,8 +122,11 @@ class DraftApp:
         self._execute_pick(player_id)
         return True
 
-    def _handle_computer_turn(self) -> None:
-        """Auto-pick for a computer team using the ADP-blended ComputerDrafter."""
+    def _handle_computer_turn(self) -> bool:
+        """Auto-pick for a computer team using the ADP-blended ComputerDrafter.
+
+        Returns True if a pick was made, False if no legal pick was available.
+        """
         current_team = self.draft_state.get_current_team()
         self.console.print(
             f"\n[dim]  {current_team.team_name} is on the clock...[/dim]"
@@ -142,12 +146,13 @@ class DraftApp:
             logger.warning(
                 "No legal picks for %s — roster may be full", current_team.team_name
             )
-            return
+            return False
 
         player_id = self.computer_drafter.make_pick(
             self.draft_state, legal, current_team.team_id
         )
         self._execute_pick(player_id)
+        return True
 
     def _show_draft_board(self) -> None:
         """Display current draft board."""
@@ -337,10 +342,14 @@ class DraftApp:
 
         self.console.print("\n[dim]Simulating remaining picks...[/dim]\n")
         while not self.controller.is_complete:
-            self._handle_computer_turn()
+            if not self._handle_computer_turn():
+                self.display.show_error("Simulation stopped: a team has no legal picks.")
+                break
 
-        self.display.show_success("Simulation complete!")
-        return "simulate"
+        if self.controller.is_complete:
+            self.display.show_success("Simulation complete!")
+            return "simulate"
+        return None
 
     def _handle_available(self, args: str, scoring: str) -> None:
         """Handle 'available' command with optional position/limit args."""

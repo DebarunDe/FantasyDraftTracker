@@ -101,7 +101,7 @@ def _make_app_with_draft(responses):
         player_data=player_data,
     )
     app.controller = DraftController(app.draft_state)
-    app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=4)
+    app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=2)
     app.computer_drafter = ComputerDrafter(
         vor_calculator=app.vor_calculator, strategy="balanced"
     )

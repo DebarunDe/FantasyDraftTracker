@@ -172,10 +172,9 @@ class TestComputeBlendedScores:
         scores = drafter._compute_blended_scores([], {})
         assert scores == {}
 
-    def test_all_scores_between_0_and_1_with_in_range_ranks(self):
-        """Scores are in [0, 1] when overall_rank values don't exceed total players."""
+    def test_all_scores_between_0_and_1(self):
+        """All composite scores are in [0, 1] for a typical pool."""
         drafter = _make_drafter("balanced")
-        # Use overall_rank values within the 3-player pool so adp_score stays in [0,1]
         players = [
             _make_player("a", "RB", overall_rank=1),
             _make_player("b", "WR", overall_rank=2),
@@ -190,25 +189,25 @@ class TestComputeBlendedScores:
         for pid, score in scores.items():
             assert 0.0 <= score <= 1.0, f"{pid} score {score} out of [0, 1]"
 
-    def test_scores_can_go_below_zero_when_adp_rank_exceeds_pool(self):
-        """When overall_rank > total available, adp_score goes negative — by design.
+    def test_scores_always_in_0_1_regardless_of_global_rank(self):
+        """Scores stay in [0, 1] even when overall_rank far exceeds the pool size.
 
-        The formula uses rank fusion relative to the available pool.  If a player's
-        consensus rank (ECR) was e.g. 200 in the full universe but only 3 players
-        remain, the ADP score becomes negative.  This is expected and does not break
-        pick selection: max(scores) still returns the best composite player.
+        ADP is re-ranked within the available pool, so a player with global ECR
+        200 in a 2-player pool gets adp_rank=2 (not 200), keeping adp_score in
+        [0, 1].  Ordering is preserved: the lower global ECR wins.
         """
         drafter = _make_drafter("balanced")
         players = [
             _make_player("a", "RB", overall_rank=1),
-            _make_player("b", "WR", overall_rank=200),  # outside pool of 3
+            _make_player("b", "WR", overall_rank=200),  # high global ECR
         ]
         vor_results = {
             "a": _make_vor_result("a", "RB", dynamic_vor=90.0),
             "b": _make_vor_result("b", "WR", dynamic_vor=50.0),
         }
         scores = drafter._compute_blended_scores(players, vor_results)
-        # Must not raise; the pick is still well-defined
+        for pid, score in scores.items():
+            assert 0.0 <= score <= 1.0, f"{pid} score {score} out of [0, 1]"
         assert scores["a"] > scores["b"]
 
     def test_best_vor_and_best_adp_player_wins_balanced(self):
