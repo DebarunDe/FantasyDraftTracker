@@ -191,7 +191,7 @@ class DraftApp:
 
             if parsed["type"] == "command":
                 result = self._handle_command(parsed["command"], parsed["args"])
-                if result == "quit":
+                if result in ("quit", "simulate"):
                     return None
                 if result == "redisplay":
                     self._show_draft_board()
@@ -312,7 +312,34 @@ class DraftApp:
                 self.display.show_error(f"Save failed: {e}")
             return None
 
+        if command in ("sim", "simulate"):
+            return self._simulate_rest_of_draft()
+
         return None
+
+    def _simulate_rest_of_draft(self) -> Optional[str]:
+        """Auto-pick all remaining turns (human and computer) using ComputerDrafter.
+
+        Returns 'simulate' when the draft is complete so the caller can exit
+        the input loop and hand off to the post-draft summary.  Returns None if
+        the user cancels.
+        """
+        try:
+            raw = self.console.input(
+                "Simulate all remaining picks? [Y/n]: "
+            ).strip().lower()
+        except EOFError:
+            return None
+
+        if raw not in ("", "y", "yes"):
+            return None
+
+        self.console.print("\n[dim]Simulating remaining picks...[/dim]\n")
+        while not self.controller.is_complete:
+            self._handle_computer_turn()
+
+        self.display.show_success("Simulation complete!")
+        return "simulate"
 
     def _handle_available(self, args: str, scoring: str) -> None:
         """Handle 'available' command with optional position/limit args."""

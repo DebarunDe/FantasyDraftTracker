@@ -400,3 +400,55 @@ class TestEdgeCases:
         text = output.getvalue()
 
         assert "No player at #99" in text or app.draft_state.current_pick == 2
+
+
+# ── Simulate command tests ───────────────────────────────────────────
+
+
+class TestSimulateCommand:
+    def test_sim_yes_completes_draft(self):
+        """Typing 'sim' and confirming auto-picks all remaining turns.
+
+        Human is on pick 1; sim should run all 6 picks to completion.
+        """
+        app, output = _make_app_with_draft([
+            "sim", "y",   # Human triggers simulation from their first turn
+        ])
+
+        app._draft_loop()
+        text = output.getvalue()
+
+        assert app.controller.is_complete
+        assert len(app.draft_state.all_picks) == 6
+        assert "Simulation complete" in text
+
+    def test_sim_no_cancels_and_draft_continues(self):
+        """Typing 'sim' then 'n' cancels simulation; draft continues normally.
+
+        Snake order: T0 T1 T1 T0 T0 T1 — human (T0) at picks 1, 4, 5.
+        """
+        app, output = _make_app_with_draft([
+            "sim", "n",      # Cancel simulation on pick 1
+            "Josh Allen", "y",  # Human picks normally
+            # Picks 2-3: CPU auto-picks
+            "1", "y",        # Human pick 4
+            "1", "y",        # Human pick 5
+            # Pick 6: CPU auto-picks
+        ])
+
+        app._draft_loop()
+
+        assert app.controller.is_complete
+        assert len(app.draft_state.all_picks) == 6
+
+    def test_sim_appears_in_help(self):
+        """'sim' command is listed in the help panel."""
+        app, output = _make_app_with_draft([
+            "h",
+            "Josh Allen", "y",
+        ])
+
+        app._handle_pick_turn()
+        text = output.getvalue()
+
+        assert "sim" in text
