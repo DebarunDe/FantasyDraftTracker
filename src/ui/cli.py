@@ -36,30 +36,31 @@ class DraftApp:
 
     def run(self) -> None:
         """Main application entry point."""
-        wizard = SetupWizard(self.console, self.persistence)
-        result = wizard.run()
+        while True:
+            wizard = SetupWizard(self.console, self.persistence)
+            result = wizard.run()
 
-        if result["action"] == "quit":
-            self.console.print("Goodbye!")
-            return
+            if result["action"] == "quit":
+                self.console.print("Goodbye!")
+                return
 
-        if result["action"] == "new":
-            self._create_new_draft(result)
-        elif result["action"] == "resume":
-            self._resume_draft(result["draft_state"])
+            if result["action"] == "new":
+                self._create_new_draft(result)
+            elif result["action"] == "resume":
+                self._resume_draft(result["draft_state"])
 
-        self.console.print()
-        self.display.show_success("Draft is ready! Entering draft loop...")
-        self.console.print()
+            self.console.print()
+            self.display.show_success("Draft is ready! Entering draft loop...")
+            self.console.print()
 
-        self._draft_loop()
+            self._draft_loop()
 
-        if self.controller and self.controller.is_complete:
-            summary = self.controller.get_draft_summary()
-            self.display.show_draft_summary(
-                summary, self.draft_state.league_config.scoring_format
-            )
-            self._post_draft_menu()
+            if self.controller and self.controller.is_complete:
+                summary = self.controller.get_draft_summary()
+                self.display.show_draft_summary(
+                    summary, self.draft_state.league_config.scoring_format
+                )
+                self._post_draft_menu()
 
     def _create_new_draft(self, config: Dict) -> None:
         """Create a new draft from wizard configuration."""
@@ -443,7 +444,7 @@ class DraftApp:
         while True:
             try:
                 raw = self.console.input(
-                    "View team roster? [team #/all/quit]: "
+                    "View team roster? [team #/all/quit to menu]: "
                 ).strip().lower()
             except EOFError:
                 break
@@ -479,8 +480,6 @@ class DraftApp:
                     )
             except ValueError:
                 self.display.show_error("Enter a team number, 'all', or 'quit'.")
-
-        self.console.print("Goodbye!")
 
 
 def main():
