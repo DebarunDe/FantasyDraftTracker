@@ -20,17 +20,22 @@ The Simulation Engine is the AI brain of the draft simulator. It provides intell
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   Simulation Engine                          │
-│                      (Stateless)                             │
-│                                                              │
+                          ┌─────────────────────┐
+                          │  Player JSON Data    │
+                          │  overall_rank (ECR)  │◄── ADP Signal
+                          └──────────┬──────────┘
+                                     │
+┌────────────────────────────────────│────────────────────────┐
+│                   Simulation Engine│                         │
+│                      (Stateless)   │                         │
+│                                    │                         │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │           VOR Calculator                               │ │
+│  │       VOR Calculator (pure — no ADP influence)         │ │
 │  │  Input: Draft State, Available Players                │ │
 │  │  Output: VOR for each available player                │ │
 │  │  - Dynamic baseline adjustment                         │ │
 │  │  - Positional scarcity multiplier                      │ │
-│  │  - Roster needs weighting                              │ │
+│  │  - Roster needs weighting + tier urgency               │ │
 │  └───────────────────┬────────────────────────────────────┘ │
 │                      │                                        │
 │                      ▼                                        │
@@ -45,15 +50,17 @@ The Simulation Engine is the AI brain of the draft simulator. It provides intell
 │                      │                                        │
 │         ┌────────────┴────────────┐                          │
 │         ▼                         ▼                          │
-│  ┌──────────────┐       ┌──────────────────┐               │
-│  │     Pick     │       │    Computer      │               │
-│  │ Recommender  │       │    Drafter       │               │
-│  │              │       │                  │               │
-│  │ - Top 5 picks│       │ - Auto-pick for │               │
-│  │ - Reasoning  │       │   AI teams      │               │
-│  │ - Trade-offs │       │ - Strategy logic│               │
-│  └──────────────┘       └──────────────────┘               │
-└──────────────────────────────────────────────────────────────┘
+│  ┌──────────────┐       ┌──────────────────────┐           │
+│  │     Pick     │       │    Computer Drafter  │◄──ADP rank│
+│  │ Recommender  │       │                      │           │
+│  │ (pure VOR)   │       │ adp_weight per       │           │
+│  │              │       │ strategy:            │           │
+│  │ - Top 5 picks│       │ vor_only   0.0       │           │
+│  │ - Reasoning  │       │ balanced   0.4       │           │
+│  │ - Trade-offs │       │ consensus  0.7       │           │
+│  └──────────────┘       │ contrarian 0.0+noise │           │
+│                         └──────────────────────┘           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Module Structure
@@ -188,6 +195,73 @@ Player: Garrett Wilson (WR)
 
 Result: Henry recommended due to higher dynamic VOR
 ```
+
+---
+
+### 1a. ADP-VOR Signal Integration (for Computer Drafter)
+
+**Why ADP blending is needed**: Pure VOR is the mathematically optimal signal, but it
+systematically differs from how real drafters behave. Analysis of the top-36 players in
+a 2025 12-team Half PPR draft revealed a structural position bias:
+
+| Position | Avg ADP Rank | Avg VOR Rank | Gap (VOR − ADP) |
+|----------|-------------|-------------|-----------------|
+| WR       | 15.2        | 44.0        | **+28.8** (under-valued by VOR) |
+| RB       | 18.5        | 7.0         | **−11.5** (over-valued by VOR) |
+| QB       | 29.5        | 16.8        | **−12.8** (over-valued by VOR) |
+| TE       | 22.3        | 37.0        | **+14.7** (under-valued by VOR) |
+
+Pure VOR ranks RBs ~12 spots too high and WRs ~29 spots too low relative to real draft
+consensus. For human recommendations this is intentional — it surfaces inefficiencies to
+exploit. For computer opponents, pure VOR would make them unrealistically RB-heavy and
+produce uncompetitive simulations.
+
+**The fix: rank fusion blending**
+
+Rather than blending raw score values (which have different units and ranges), blending
+is done in rank space so both signals contribute equally on a 0–1 scale:
+
+```python
+total_players = len(available_players)
+
+# Rank by dynamic_vor descending (1 = highest VOR)
+vor_score = 1 - (vor_rank - 1) / total_players
+
+# ADP rank from overall_rank field (FantasyPros ECR, lower = better)
+adp_rank = player["overall_rank"]
+adp_score = 1 - (adp_rank - 1) / total_players
+
+# Weighted blend — adp_weight controls realism vs optimality
+composite = (1 - adp_weight) * vor_score + adp_weight * adp_score
+```
+
+**Key design decisions**:
+
+1. **VOR Calculator is not modified** — it remains pure and is used unchanged for human
+   recommendations (`PickRecommender`). ADP blending is applied only inside
+   `ComputerDrafter._compute_blended_scores()`.
+
+2. **`overall_rank` is the ADP signal** — the FantasyPros ECR column already written into
+   every player record by the data pipeline. No new data source is needed.
+
+3. **Rank fusion avoids scale mismatch** — VOR values range from −100 to +200; `overall_rank`
+   is an integer 1–N. Normalizing both to 0–1 before blending prevents one signal from
+   dominating by magnitude.
+
+4. **`contrarian` uses noise instead of ADP weight** — ±15% random perturbation on pure
+   VOR simulates a drafter intentionally zigging when consensus zags.
+
+**ADP signal data flow**:
+```
+data pipeline                  computer drafter
+─────────────                  ────────────────
+FantasyPros rankings CSV  →    available_players list
+  Overall_Rank column     →    player['overall_rank']
+  → players_2025.json     →    _compute_blended_scores()
+                                composite score → pick
+```
+
+---
 
 ### 2. Monte Carlo Simulator (`monte_carlo.py`)
 
@@ -532,135 +606,151 @@ def _generate_trade_offs(self, recommended, alternatives, draft_state):
 
 ### 4. Computer Drafter (`computer_drafter.py`)
 
-**Purpose**: Make intelligent picks for AI opponents
+**Purpose**: Make intelligent picks for AI opponents using ADP-blended composite scoring
+
+**Design principle**: Human recommendations use pure VOR (strategically optimal). Computer
+opponents use ADP-blended scoring so they behave like real fantasy drafters, making
+simulations more realistic and competitive.
 
 ```python
+import numpy as np
 from typing import Dict, List, Optional
 
+from src.simulation_engine.config import (
+    ADP_BLEND_STRATEGIES,
+    COMPUTER_ADP_WEIGHT,
+    COMPUTER_PERSONALITY_VARIANCE,
+)
+
+
 class ComputerDrafter:
-    """Makes draft picks for AI teams"""
-    
+    """Makes ADP-blended draft picks for AI teams.
+
+    Uses rank fusion to combine dynamic VOR and ADP (overall_rank) signals.
+    The adp_weight controls the blend: 0.0 = pure VOR, 1.0 = pure ADP.
+    """
+
     def __init__(
         self,
-        vor_calculator: VORCalculator,
-        mc_simulator: Optional[MonteCarloSimulator] = None,
-        strategy: str = "optimal"
+        vor_calculator: "DynamicVORCalculator",
+        strategy: str = "balanced",
+        adp_weight: Optional[float] = None,
     ):
         self.vor_calculator = vor_calculator
-        self.mc_simulator = mc_simulator
         self.strategy = strategy
-        
+        # Explicit adp_weight overrides the strategy default
+        if adp_weight is not None:
+            self.adp_weight = adp_weight
+        else:
+            self.adp_weight = ADP_BLEND_STRATEGIES.get(strategy, COMPUTER_ADP_WEIGHT)
+        # contrarian uses noise in addition to pure VOR
+        self.noise_factor = 0.15 if strategy == "contrarian" else 0.0
+
     def make_pick(
         self,
         draft_state: Dict,
         available_players: List[Dict],
-        team_id: int
+        team_id: int,
     ) -> str:
+        """Make a pick for a computer team using the configured strategy.
+
+        Returns: player_id of the chosen pick.
         """
-        Make a pick for a computer team.
-        
-        Strategies:
-        - optimal: Use Monte Carlo simulations (slow but best)
-        - fast: Use VOR only (faster)
-        - balanced: VOR + lightweight simulation
-        """
-        
-    def _optimal_pick(
+        vor_results = self.vor_calculator.calculate_from_draft_state(
+            draft_state, team_id
+        )
+        scores = self._compute_blended_scores(available_players, vor_results)
+        best_pick = max(scores, key=scores.get)
+        return best_pick
+
+    def _compute_blended_scores(
         self,
-        draft_state: Dict,
-        available: List[Dict],
-        team_id: int
-    ) -> str:
-        """Use full Monte Carlo simulation (500 iterations)"""
-        
-    def _fast_pick(
-        self,
-        draft_state: Dict,
-        available: List[Dict],
-        team_id: int
-    ) -> str:
-        """Use dynamic VOR only, with positional balancing"""
-        
-    def _add_draft_personality(self) -> float:
+        available_players: List[Dict],
+        vor_results: Dict,
+    ) -> Dict[str, float]:
+        """Compute composite score for each available player.
+
+        Uses rank fusion: both VOR and ADP are normalized to 0-1 before blending
+        so neither signal dominates by magnitude.
+
+        Formula:
+            vor_score = 1 - (vor_rank - 1) / total_players
+            adp_score = 1 - (adp_rank - 1) / total_players
+            composite = (1 - adp_weight) * vor_score + adp_weight * adp_score
         """
-        Add slight randomness so computer teams don't all draft identically.
-        
-        Returns: Noise factor to apply to VOR (0.9 - 1.1)
-        """
+        total = len(available_players)
+        if total == 0:
+            return {}
+
+        # Build VOR rank: sort by dynamic_vor descending → rank 1 = best
+        vor_rank_map = self._rank_by_vor(vor_results)
+
+        scores = {}
+        for player in available_players:
+            pid = player["player_id"]
+            vor_rank = vor_rank_map.get(pid, total)
+            vor_score = 1 - (vor_rank - 1) / total
+
+            # ADP signal: overall_rank (FantasyPros ECR, lower = better)
+            # Fall back to total (worst rank) if field is missing
+            adp_rank = player.get("overall_rank") or total
+            adp_score = 1 - (adp_rank - 1) / total
+
+            composite = (
+                (1 - self.adp_weight) * vor_score
+                + self.adp_weight * adp_score
+            )
+
+            # contrarian: add noise to pure VOR to exploit ADP inefficiencies
+            if self.noise_factor > 0:
+                noise = np.random.uniform(-self.noise_factor, self.noise_factor)
+                composite = max(0.0, composite + noise)
+
+            scores[pid] = composite
+
+        return scores
+
+    @staticmethod
+    def _rank_by_vor(vor_results: Dict) -> Dict[str, int]:
+        """Return a dict mapping player_id to 1-based VOR rank (1 = highest VOR)."""
+        sorted_ids = sorted(
+            vor_results.keys(),
+            key=lambda pid: vor_results[pid].dynamic_vor,
+            reverse=True,
+        )
+        return {pid: rank for rank, pid in enumerate(sorted_ids, start=1)}
 ```
 
-**Computer Strategy Implementation**:
+**Strategy Details**:
+
+| Strategy     | `adp_weight` | Noise  | Description |
+|-------------|--------------|--------|-------------|
+| `vor_only`  | 0.0          | 0.0    | Pure dynamic VOR. RB-heavy early rounds (VOR reflects steeper RB talent dropoff). Mathematically optimal. |
+| `balanced`  | 0.4          | 0.0    | 60% VOR + 40% ADP. Default for most computer opponents. Produces realistic position distributions. |
+| `consensus` | 0.7          | 0.0    | 30% VOR + 70% ADP. Closely follows the expert consensus board. Simulates a risk-averse human drafter. |
+| `contrarian`| 0.0          | 0.15   | Pure VOR + ±15% random noise. Intentionally exploits ADP inefficiencies. High variance — sometimes brilliant, sometimes poor. |
+
+**Why `balanced` is the default**: At `adp_weight=0.4`, the position bias analysis shows
+the composite score moves WRs up ~17 spots and RBs down ~7 spots relative to pure VOR,
+bringing distributions much closer to real draft consensus while retaining VOR's scarcity
+and roster-need intelligence.
+
+**Example: Round 1 pick selection with `balanced` strategy**
 
 ```python
-def _fast_pick(self, draft_state, available, team_id):
-    """
-    Fast pick strategy using dynamic VOR with smart balancing.
-    
-    Algorithm:
-    1. Calculate dynamic VOR for all available players
-    2. Apply team-specific positional needs multiplier
-    3. Add small random factor for variety
-    4. Pick highest adjusted VOR
-    """
-    team_roster = draft_state['teams'][team_id]['roster']
-    
-    # Calculate VOR for all available
-    vor_results = self.vor_calculator.calculate_dynamic_vor(
-        available,
-        self._get_drafted_counts(draft_state),
-        draft_state['league_config']['roster_slots'],
-        team_roster
-    )
-    
-    # Apply positional balance
-    adjusted_scores = {}
-    for player_id, vor in vor_results.items():
-        player = next(p for p in available if p['player_id'] == player_id)
-        position = player['position']
-        
-        # Boost positions we need more
-        need_multiplier = self._calculate_positional_urgency(
-            position, team_roster, draft_state
-        )
-        
-        # Add personality (small random factor)
-        personality_factor = np.random.uniform(0.95, 1.05)
-        
-        adjusted_scores[player_id] = (
-            vor.dynamic_vor * need_multiplier * personality_factor
-        )
-    
-    # Pick highest adjusted score
-    best_pick = max(adjusted_scores, key=adjusted_scores.get)
-    return best_pick
+# State: draft just started, 12-team half PPR, team 1's first pick
 
+# Pure VOR top 3 (RB-heavy): Saquon Barkley, Derrick Henry, Bijan Robinson
+# ADP top 3 (ECR):           Saquon Barkley, CeeDee Lamb, Justin Jefferson
 
-def _calculate_positional_urgency(self, position, roster, draft_state):
-    """
-    How urgently does this team need this position?
-    
-    Returns multiplier: 0.8 (already stacked) to 1.5 (desperate need)
-    """
-    current_round = draft_state['current_round']
-    total_rounds = draft_state['league_config']['total_rounds']
-    
-    slots_needed = draft_state['league_config']['roster_slots'][position]
-    slots_filled = len(roster.get(position, []))
-    
-    if slots_filled >= slots_needed:
-        # Position filled, less urgent
-        return 0.8
-    elif slots_filled == 0:
-        # No players at position
-        if current_round > total_rounds / 2:
-            # Late in draft, very urgent
-            return 1.5
-        else:
-            # Early draft, moderate urgency
-            return 1.2
-    else:
-        # Partially filled, normal urgency
-        return 1.0
+# With adp_weight=0.4 (12 teams, 654 available players):
+#   Saquon:    VOR rank 1  (score 1.000) + ADP rank 7  (score 0.991) → composite 0.996
+#   CeeDee:    VOR rank 33 (score 0.951) + ADP rank 3  (score 0.997) → composite 0.970
+#   Jefferson: VOR rank 22 (score 0.967) + ADP rank 4  (score 0.995) → composite 0.978
+#   Henry:     VOR rank 2  (score 0.998) + ADP rank 20 (score 0.971) → composite 0.987
+
+# Result: Saquon still #1 (dominant on both signals). WRs now appear in the top 5
+# (vs. pure VOR where they would be ranked ~20-40). Draft looks realistic.
 ```
 
 ### 5. Configuration (`config.py`)
@@ -673,32 +763,92 @@ MC_NUM_SIMULATIONS = 1000
 MC_SIMULATION_DEPTH = 5  # Rounds to simulate ahead
 MC_PARALLEL_WORKERS = 4  # CPU cores for parallel simulation
 
-# VOR calculation parameters
+# ── VOR calculation parameters ────────────────────────────────────────────────
+# Used by DynamicVORCalculator (human recommendations — no ADP influence).
+# Formula: dynamic_vor = base_vor * scarcity * need * uncertainty_adj * tier_urgency
+#
+# Scarcity weights calibrated via Petersen methodology + empirical simulation testing:
+# - RB/WR both 1.5 (balanced early-round value)
+# - TE 1.6 (scarce after top tier)
+# - QB 1.3 (deep position, "wait on QB" strategy viable)
+# - K/DST 0.3 (inverse scarcity — value DROPS as more are drafted; streaming positions)
 POSITION_SCARCITY_WEIGHTS = {
-    "QB": 1.2,
-    "RB": 2.0,
-    "WR": 1.8,
-    "TE": 1.5,
-    "K": 1.0,
-    "DST": 1.0
+    "QB":  1.3,
+    "RB":  1.5,
+    "WR":  1.5,
+    "TE":  1.6,
+    "K":   0.3,
+    "DST": 0.3,
 }
 
-ROSTER_NEED_WEIGHT = 0.5  # How much to weight positional needs
+ROSTER_NEED_WEIGHT    = 0.6   # Boost for unfilled starting slots
+ROSTER_FILLED_PENALTY = 0.4   # Penalty when all starting slots are filled
+ROSTER_EXCESS_PENALTY = 0.15  # Per-extra-player penalty beyond starters
 
-# Computer drafter parameters
-COMPUTER_STRATEGY = "fast"  # "optimal", "fast", "balanced"
-COMPUTER_PERSONALITY_VARIANCE = 0.05  # +/- 5% randomness
+# Need normalization: max starting slots any position can have (RB/WR with FLEX = 3).
+# QB need = 1 + (1 * 0.6 / 3.0) = 1.2; RB need = 1 + (3 * 0.6 / 3.0) = 1.6
+NEED_NORMALIZATION = 3.0
 
-# Performance tuning
-CANDIDATE_POOL_SIZE = 15  # Top N players to run MC simulations on
-EARLY_ROUND_THRESHOLD = 3  # Rounds to consider "early"
-LATE_ROUND_THRESHOLD = 10  # Rounds to consider "late"
+# Position-specific hard caps (total players, starting + bench).
+# Applied after progressive excess penalties to absolutely prevent hoarding.
+POSITION_HARD_CAPS = {
+    "QB": 3,   # 1 starter + 2 bench max
+    "RB": 7,   # 3 starting slots (RB1, RB2, FLEX) + 4 bench max
+    "WR": 7,   # 3 starting slots (WR1, WR2, FLEX) + 4 bench max
+    "TE": 3,   # 2 starting slots (TE1, FLEX-share) + 1 bench max
+}
+
+# Tier urgency boost: rewards picking players who are uniquely scarce in their tier.
+# Formula: urgency = 1 + (tier_gap / tier_size) * TIER_URGENCY_WEIGHT
+# Example: Chase alone in WR Tier 1 (28% gap) → urgency = 1 + 0.28/1 * 1.5 = 1.42
+# Example: Allen + Jackson in QB Tier 1 of 2 (17% gap) → urgency = 1.13
+# Example: Saquon in RB Tier 1 of 23 (24% gap) → urgency = 1.016
+TIER_GAP_THRESHOLD  = 0.15   # % VOR drop between adjacent players = tier boundary
+TIER_URGENCY_WEIGHT = 1.5
+
+# Position uncertainty (Harvard study R² values — higher = less predictable)
+POSITION_UNCERTAINTY = {
+    "QB":  0.20,   # R²=0.80 → most predictable
+    "TE":  0.21,   # R²=0.79 → very predictable
+    "WR":  0.56,   # R²=0.44 → moderate uncertainty
+    "RB":  0.97,   # R²=0.03 → highly unpredictable
+    "K":   0.70,
+    "DST": 0.70,
+}
+
+EARLY_ROUND_THRESHOLD = 3    # Rounds 1-3: penalize uncertainty (favor safe picks)
+LATE_ROUND_THRESHOLD  = 10   # Round 10+: reward uncertainty (favor upside)
+
+# ── Computer drafter parameters ───────────────────────────────────────────────
+# ADP-blended composite scoring for realistic AI opponents.
+# Human recommendations use pure VOR; computer opponents blend VOR + ADP signal.
+# The ADP signal is player['overall_rank'] (FantasyPros ECR) — already in the
+# player JSON from the data pipeline. No new data source is needed.
+
+COMPUTER_STRATEGY            = "balanced"  # Default for all computer teams
+COMPUTER_PERSONALITY_VARIANCE = 0.05       # +/- 5% noise for vor_only/contrarian
+
+# Default ADP blend weight (0.0 = pure VOR, 1.0 = pure ADP)
+COMPUTER_ADP_WEIGHT = 0.4    # 60% VOR + 40% ADP → realistic human-like drafting
+
+# Per-strategy ADP blend weights.
+# ComputerDrafter.__init__ looks up strategy name here when no explicit
+# adp_weight is provided.
+ADP_BLEND_STRATEGIES = {
+    "vor_only":   0.0,   # Pure dynamic VOR (optimal but RB-heavy)
+    "balanced":   0.4,   # 60% VOR + 40% ADP (default — realistic)
+    "consensus":  0.7,   # 30% VOR + 70% ADP (consensus follower)
+    "contrarian": 0.0,   # Pure VOR + noise=0.15 (exploits ADP inefficiencies)
+}
+
+# ── Performance tuning ────────────────────────────────────────────────────────
+CANDIDATE_POOL_SIZE = 15  # Top N players to run Monte Carlo simulations on
 
 # Adaptive simulation depths
 SIMULATION_DEPTH_BY_ROUND = {
     "early": 5,   # Rounds 1-3
-    "mid": 3,     # Rounds 4-8
-    "late": 2     # Rounds 9+
+    "mid":   3,   # Rounds 4-9
+    "late":  2,   # Rounds 10+
 }
 ```
 
@@ -897,23 +1047,113 @@ def test_full_recommendation_flow():
     assert recommendations[0].expected_value > recommendations[1].expected_value
 ```
 
+### ADP Blend Tests
+
+```python
+# test_computer_drafter.py
+
+def test_blended_score_uses_overall_rank():
+    """ADP score must derive from player['overall_rank'], not from VOR."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    computer = ComputerDrafter(vor_calculator=vor_calc, strategy="balanced")
+
+    # Player A: weak VOR but top ADP rank
+    player_a = _make_player("a", "WR", vor_half_ppr=5.0, overall_rank=1)
+    # Player B: strong VOR but poor ADP rank
+    player_b = _make_player("b", "RB", vor_half_ppr=80.0, overall_rank=200)
+
+    available = [player_a, player_b]
+    vor_results = {
+        "a": VORResult("a", 5.0, 5.0, 1.0, 1.0, "WR", 1),
+        "b": VORResult("b", 80.0, 80.0, 1.0, 1.0, "RB", 1),
+    }
+    scores = computer._compute_blended_scores(available, vor_results)
+
+    # With adp_weight=0.4 the ADP boost for player_a shrinks the raw gap
+    vor_only_gap = 80.0 - 5.0       # 75 pts if scoring raw VOR
+    blended_gap = abs(scores["b"] - scores["a"])
+    assert blended_gap < 0.5        # Rank-fused gap is in 0-1 space, much smaller
+
+
+def test_vor_only_strategy_ignores_adp():
+    """adp_weight=0.0 means composite is determined solely by VOR rank."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    computer = ComputerDrafter(vor_calculator=vor_calc, strategy="vor_only")
+    assert computer.adp_weight == 0.0
+    assert computer.noise_factor == 0.0
+
+
+def test_contrarian_strategy_has_noise():
+    """contrarian strategy sets noise_factor=0.15 and adp_weight=0.0."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    computer = ComputerDrafter(vor_calculator=vor_calc, strategy="contrarian")
+    assert computer.adp_weight == 0.0
+    assert computer.noise_factor == 0.15
+
+
+def test_consensus_strategy_adp_weight():
+    """consensus strategy must use adp_weight=0.7."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    computer = ComputerDrafter(vor_calculator=vor_calc, strategy="consensus")
+    assert computer.adp_weight == 0.7
+
+
+def test_missing_overall_rank_falls_back_gracefully():
+    """Players without overall_rank should be treated as last (rank = total)."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    computer = ComputerDrafter(vor_calculator=vor_calc, strategy="balanced")
+
+    player_no_rank = _make_player("x", "QB", vor_half_ppr=30.0)
+    player_no_rank.pop("overall_rank", None)
+
+    available = [player_no_rank]
+    vor_results = {"x": VORResult("x", 30.0, 30.0, 1.0, 1.0, "QB", 1)}
+    scores = computer._compute_blended_scores(available, vor_results)
+
+    assert isinstance(scores["x"], float)  # Must not raise
+
+
+def test_all_strategies_produce_legal_picks(draft_state_fixture):
+    """All four strategies must return a valid player_id from the available pool."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    available_ids = {p["player_id"] for p in draft_state_fixture.available_list}
+
+    for strategy in ["vor_only", "balanced", "consensus", "contrarian"]:
+        computer = ComputerDrafter(vor_calculator=vor_calc, strategy=strategy)
+        pick = computer.make_pick(
+            draft_state_fixture, draft_state_fixture.available_list, team_id=0
+        )
+        assert pick in available_ids, f"Strategy {strategy!r} returned invalid pick"
+```
+
 ### Performance Tests
 
 ```python
 import time
 
 def test_recommendation_performance():
-    """Ensure recommendations complete within time limit"""
+    """Ensure recommendations complete within time limit."""
     start = time.time()
-    
     recommendations = recommender.recommend_picks(
         large_draft_state,
         many_available_players,
         num_recommendations=5
     )
-    
     elapsed = time.time() - start
     assert elapsed < 2.0  # Must complete in under 2 seconds
+
+
+def test_computer_pick_performance():
+    """Computer pick (balanced strategy) must complete within 0.5 seconds."""
+    vor_calc = DynamicVORCalculator(scoring_format="half_ppr", league_size=12)
+    computer = ComputerDrafter(vor_calculator=vor_calc, strategy="balanced")
+
+    start = time.time()
+    pick = computer.make_pick(large_draft_state, many_available_players, team_id=0)
+    elapsed = time.time() - start
+
+    assert elapsed < 0.5
+    assert pick is not None
 ```
 
 ## Future Enhancements
@@ -957,6 +1197,6 @@ def test_recommendation_performance():
 ---
 
 ## Document Version
-- **Version**: 1.0
-- **Last Updated**: 2024-08-15
-- **Status**: Approved for MVP Development
+- **Version**: 1.1
+- **Last Updated**: 2026-02-21
+- **Status**: Updated for M9 ADP-Blended Computer Drafter

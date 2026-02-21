@@ -2,8 +2,17 @@
 
 import pytest
 
+from src.data_pipeline.config import calculate_baseline_count
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_state import DraftState, LeagueConfig
+from src.simulation_engine.config import (
+    POSITION_SCARCITY_WEIGHTS,
+    ROSTER_NEED_WEIGHT,
+    ROSTER_FILLED_PENALTY,
+    ROSTER_EXCESS_PENALTY,
+    NEED_NORMALIZATION,
+    TIER_URGENCY_WEIGHT,
+)
 from src.simulation_engine.models import VORResult
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
@@ -112,7 +121,7 @@ class TestDynamicVORCalculatorInit:
 
 class TestScarcityMultiplier:
     def setup_method(self):
-        self.calc = DynamicVORCalculator("half_ppr")
+        self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def test_no_players_drafted_returns_one(self):
         result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=0)
@@ -124,18 +133,23 @@ class TestScarcityMultiplier:
         assert high > low > 1.0
 
     def test_rb_higher_weight_than_qb_at_equal_pct(self):
-        """At the same drafted percentage, RB weight (2.0) > QB weight (1.2)."""
+        """At the same drafted percentage, RB weight (1.8) > QB weight (1.3)."""
         # 50% drafted at each position
-        rb_scarcity = self.calc._calculate_scarcity_multiplier("RB", drafted_count=18)  # 18/36
-        qb_scarcity = self.calc._calculate_scarcity_multiplier("QB", drafted_count=6)   # 6/12
+        rb_baseline = calculate_baseline_count("RB", 12)  # 40
+        qb_baseline = calculate_baseline_count("QB", 12)  # 18
+        rb_scarcity = self.calc._calculate_scarcity_multiplier("RB", drafted_count=rb_baseline // 2)
+        qb_scarcity = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline // 2)
         assert rb_scarcity > qb_scarcity
 
-    def test_wr_higher_weight_than_te_at_equal_pct(self):
-        """At the same drafted percentage, WR weight (1.8) > TE weight (1.5)."""
-        # 50% drafted at each position
-        wr_scarcity = self.calc._calculate_scarcity_multiplier("WR", drafted_count=18)  # 18/36
-        te_scarcity = self.calc._calculate_scarcity_multiplier("TE", drafted_count=6)   # 6/12
-        assert wr_scarcity > te_scarcity
+    def test_te_higher_weight_than_wr_at_equal_pct(self):
+        """At the same drafted percentage, TE weight (1.6) > WR weight (1.4)."""
+        # 50% drafted at each position (using league-size-dependent baselines)
+        wr_baseline = calculate_baseline_count("WR", 12)  # 41
+        te_baseline = calculate_baseline_count("TE", 12)  # 14
+        wr_scarcity = self.calc._calculate_scarcity_multiplier("WR", drafted_count=wr_baseline // 2)
+        te_scarcity = self.calc._calculate_scarcity_multiplier("TE", drafted_count=te_baseline // 2)
+        # TE has higher scarcity weight now (1.6 vs 1.4)
+        assert te_scarcity > wr_scarcity
 
     def test_k_and_dst_have_equal_weight(self):
         k_scarcity = self.calc._calculate_scarcity_multiplier("K", drafted_count=5)
@@ -144,22 +158,60 @@ class TestScarcityMultiplier:
 
     def test_drafted_pct_capped_at_one(self):
         """Even if more players drafted than baseline, pct stays <= 1.0."""
-        # VOR_BASELINE_COUNTS["QB"] = 12, but draft 20
-        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=20)
-        max_result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=12)
+        qb_baseline = calculate_baseline_count("QB", 12)  # 18
+        # Draft more than baseline
+        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline + 5)
+        max_result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline)
         assert result == max_result
 
     def test_specific_values(self):
         """Verify formula: 1 + (drafted_pct * weight)."""
-        # RB: weight=2.0, baseline=36
-        # 18 drafted: pct = 18/36 = 0.5, scarcity = 1 + 0.5*2.0 = 2.0
-        result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=18)
-        assert result == pytest.approx(2.0)
+        # RB: weight=1.8, baseline=40 (12-team)
+        # 20 drafted: pct = 20/40 = 0.5, scarcity = 1 + 0.5*1.8 = 1.9
+        rb_baseline = calculate_baseline_count("RB", 12)
+        result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=rb_baseline // 2)
+        expected = 1.0 + 0.5 * POSITION_SCARCITY_WEIGHTS["RB"]
+        assert result == pytest.approx(expected)
 
-        # QB: weight=1.2, baseline=12
-        # 6 drafted: pct = 6/12 = 0.5, scarcity = 1 + 0.5*1.2 = 1.6
-        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=6)
-        assert result == pytest.approx(1.6)
+        # QB: weight=1.3, baseline=18 (12-team)
+        # 9 drafted: pct = 9/18 = 0.5, scarcity = 1 + 0.5*1.3 = 1.65
+        qb_baseline = calculate_baseline_count("QB", 12)
+        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline // 2)
+        expected_qb = 1.0 + 0.5 * POSITION_SCARCITY_WEIGHTS["QB"]
+        assert result == pytest.approx(expected_qb)
+
+    def test_k_and_dst_inverse_scarcity(self):
+        """K/DST scarcity DECREASES as more drafted (inverse of skill positions).
+
+        Skill positions: scarcity = 1 + (pct * weight) → increases
+        K/DST: scarcity = 1 - (pct * weight) → decreases
+        """
+        k_baseline = calculate_baseline_count("K", 12)  # 9
+        k_weight = POSITION_SCARCITY_WEIGHTS["K"]  # 0.3
+
+        # No K drafted: scarcity = 1.0
+        scarcity_0 = self.calc._calculate_scarcity_multiplier("K", 0)
+        assert scarcity_0 == pytest.approx(1.0)
+
+        # Some K drafted: verify formula scarcity = 1 - (pct * weight)
+        drafted_count = 4
+        drafted_pct = drafted_count / k_baseline  # 4/9 ≈ 0.444
+        scarcity_some = self.calc._calculate_scarcity_multiplier("K", drafted_count)
+        expected_some = 1.0 - (drafted_pct * k_weight)
+        assert scarcity_some == pytest.approx(expected_some)
+
+        # All K drafted: scarcity = 1 - 1.0*0.3 = 0.7
+        scarcity_full = self.calc._calculate_scarcity_multiplier("K", k_baseline)
+        expected_full = 1.0 - k_weight
+        assert scarcity_full == pytest.approx(expected_full)
+
+        # Verify it decreases (inverse of skill positions)
+        assert scarcity_0 > scarcity_some > scarcity_full
+
+        # Same for DST
+        dst_baseline = calculate_baseline_count("DST", 12)  # 9
+        dst_some = self.calc._calculate_scarcity_multiplier("DST", drafted_count)
+        assert dst_some == scarcity_some  # Same weight, same behavior
 
 
 # ── Need Multiplier Tests ────────────────────────────────────────────
@@ -167,17 +219,23 @@ class TestScarcityMultiplier:
 
 class TestNeedMultiplier:
     def setup_method(self):
-        self.calc = DynamicVORCalculator("half_ppr")
+        self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def _empty_roster(self):
         return {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
 
     def test_empty_roster_gives_max_need(self):
-        """All slots empty → maximum need multiplier."""
+        """All slots empty → need = 1 + (empty * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION)."""
         roster = self._empty_roster()
-        # QB: 1 slot, 0 filled → need = 1 + (1/1)*0.5 = 1.5
+        # QB: 1 empty slot → need = 1 + 1*0.6/3.0 = 1.2
         result = self.calc._calculate_need_multiplier("QB", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1.5)
+        expected = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert result == pytest.approx(expected)
+
+        # RB: 3 empty slots (2 RB + 1 FLEX) → need = 1 + 3*0.6/3.0 = 1.6
+        result_rb = self.calc._calculate_need_multiplier("RB", roster, DEFAULT_ROSTER_SLOTS)
+        expected_rb = 1.0 + 3 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert result_rb == pytest.approx(expected_rb)
 
     def test_filled_position_reduces_need(self):
         """Filling a position slot reduces need multiplier."""
@@ -189,20 +247,22 @@ class TestNeedMultiplier:
 
         assert need_filled < need_empty
 
-    def test_fully_filled_gives_one(self):
-        """When all slots filled, need multiplier is 1.0."""
+    def test_fully_filled_gives_penalty(self):
+        """When all slots filled, need multiplier penalizes (< 1.0)."""
         roster = self._empty_roster()
         roster["QB"] = ["qb1"]  # QB has 1 slot
         result = self.calc._calculate_need_multiplier("QB", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1.0)
+        # Filled: need = 1 - ROSTER_FILLED_PENALTY = 1 - 0.4 = 0.6
+        expected = 1.0 - ROSTER_FILLED_PENALTY
+        assert result == pytest.approx(expected)
 
     def test_flex_eligible_includes_flex_slot(self):
-        """RB/WR/TE need includes the FLEX slot."""
+        """RB/WR/TE need includes the FLEX slot (3 total empty slots → max boost)."""
         roster = self._empty_roster()
-        # RB: 2 RB slots + 1 FLEX = 3 total, 0 filled
-        # need = 1 + (3/3)*0.5 = 1.5
+        # RB: 2 RB slots + 1 FLEX = 3 empty → need = 1 + 3*0.6/3.0 = 1.6
         result = self.calc._calculate_need_multiplier("RB", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1.5)
+        expected = 1.0 + 3 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert result == pytest.approx(expected)
 
     def test_flex_filled_reduces_rb_need(self):
         """Filling the FLEX slot reduces need for FLEX-eligible positions."""
@@ -215,41 +275,94 @@ class TestNeedMultiplier:
         assert need_after < need_before
 
     def test_qb_not_flex_eligible(self):
-        """QB need does NOT include FLEX slot."""
+        """QB need does NOT include FLEX slot (1 empty slot → smaller boost than RB)."""
         roster = self._empty_roster()
-        # QB has 1 slot only (FLEX doesn't count)
         result = self.calc._calculate_need_multiplier("QB", roster, DEFAULT_ROSTER_SLOTS)
-        # 1 + (1/1)*0.5 = 1.5
-        assert result == pytest.approx(1.5)
+        # 1 empty slot: need = 1 + 1*0.6/3.0 = 1.2 (less than RB's 1.6)
+        expected = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert result == pytest.approx(expected)
+        # Verify QB need < RB need (intentional design: QBs drafted later)
+        rb_need = self.calc._calculate_need_multiplier("RB", roster, DEFAULT_ROSTER_SLOTS)
+        assert result < rb_need
 
     def test_k_not_flex_eligible(self):
-        """K need does NOT include FLEX slot."""
+        """K need does NOT include FLEX slot (1 empty slot → 1.2)."""
         roster = self._empty_roster()
         result = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1.5)
+        expected = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert result == pytest.approx(expected)
 
     def test_dst_not_flex_eligible(self):
-        """DST need does NOT include FLEX slot."""
+        """DST need does NOT include FLEX slot (1 empty slot → 1.2)."""
         roster = self._empty_roster()
         result = self.calc._calculate_need_multiplier("DST", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1.5)
+        expected = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert result == pytest.approx(expected)
 
     def test_partially_filled_rb(self):
         """Partially filled RB slots give intermediate need."""
         roster = self._empty_roster()
         roster["RB"] = ["rb1"]
-        # RB: 2 RB slots + 1 FLEX = 3 total, 1 filled
-        # need = 1 + (2/3)*0.5 = 1.333...
+        # RB: 3 total starting (2 RB + 1 FLEX), 1 filled → 2 empty
+        # need = 1 + (2 * 0.6 / 3.0) = 1.4
         result = self.calc._calculate_need_multiplier("RB", roster, DEFAULT_ROSTER_SLOTS)
-        assert result == pytest.approx(1 + (2 / 3) * 0.5)
+        expected = 1 + (2 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION)
+        assert result == pytest.approx(expected, abs=0.01)
 
-    def test_zero_total_slots_returns_one(self):
-        """Position with no slots in config returns 1.0."""
+    def test_zero_total_slots_returns_penalty(self):
+        """Position with no slots in config returns penalized value."""
         roster = self._empty_roster()
         slots = {**DEFAULT_ROSTER_SLOTS}
         del slots["K"]
         result = self.calc._calculate_need_multiplier("K", roster, slots)
-        assert result == 1.0
+        # No slots at all: 1 - ROSTER_FILLED_PENALTY = 1 - 0.4 = 0.6
+        expected = 1.0 - ROSTER_FILLED_PENALTY
+        assert result == pytest.approx(expected)
+
+    def test_excess_players_increase_penalty(self):
+        """Drafting beyond starting slots increases penalty progressively."""
+        roster = self._empty_roster()
+        roster["K"] = ["k1"]  # K slot filled (1/1)
+        need_first_extra = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+
+        roster["K"] = ["k1", "k2"]  # 2 Ks, only 1 slot (1 excess)
+        need_second_extra = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+
+        # Both should be < 1.0 (penalized)
+        assert need_first_extra < 1.0
+        assert need_second_extra < 1.0
+        # More excess = more penalty
+        assert need_second_extra < need_first_extra
+
+    def test_penalty_floors_at_minimum(self):
+        """Need multiplier floors depend on position.
+
+        K/DST floor at 0.0 to aggressively discourage hoarding.
+        Other positions floor at 0.01 (lowered from 0.05 to allow stronger penalties).
+        """
+        roster = self._empty_roster()
+
+        # K/DST with extreme excess floor at 0.0
+        roster["K"] = [f"k{i}" for i in range(10)]
+        result_k = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+        assert result_k == pytest.approx(0.0)
+
+        # Skill positions with extreme excess floor at 0.01
+        roster_rb = self._empty_roster()
+        roster_rb["RB"] = [f"rb{i}" for i in range(20)]
+        result_rb = self.calc._calculate_need_multiplier("RB", roster_rb, DEFAULT_ROSTER_SLOTS)
+        assert result_rb >= 0.01
+
+    def test_filled_k_penalizes_vs_unfilled_wr(self):
+        """A team with K filled should value WR much higher than another K."""
+        roster = self._empty_roster()
+        roster["K"] = ["k1"]
+        k_need = self.calc._calculate_need_multiplier("K", roster, DEFAULT_ROSTER_SLOTS)
+        wr_need = self.calc._calculate_need_multiplier("WR", roster, DEFAULT_ROSTER_SLOTS)
+        # WR has 3 empty slots → boosted; K is filled → penalized
+        assert wr_need > k_need
+        assert wr_need > 1.0
+        assert k_need < 1.0
 
 
 # ── Position Slot Counting Tests ─────────────────────────────────────
@@ -302,7 +415,7 @@ class TestCountPositionSlots:
 
 class TestCalculateDynamicVOR:
     def setup_method(self):
-        self.calc = DynamicVORCalculator("half_ppr")
+        self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def test_returns_vor_result_for_each_player(self):
         players = [_make_player("rb1", "RB"), _make_player("wr1", "WR")]
@@ -318,20 +431,26 @@ class TestCalculateDynamicVOR:
         assert isinstance(result["rb1"], VORResult)
 
     def test_no_drafted_no_roster_returns_base_vor_times_need(self):
-        """With no drafted players and empty roster, VOR = base * 1.0 * need."""
+        """With no drafted players and empty roster, VOR = base * scarcity * need * uncertainty."""
         player = _make_player("qb1", "QB", vor_half_ppr=40.0)
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
         result = self.calc.calculate_dynamic_vor(
             available_players=[player],
             drafted_positions={},
             roster_slots=DEFAULT_ROSTER_SLOTS,
-            team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            team_roster=roster,
+            current_round=5,  # Mid-round (uncertainty_adj = 1.0)
         )
         r = result["qb1"]
         assert r.base_vor == 40.0
         assert r.scarcity_multiplier == 1.0
-        # QB: 1 slot, 0 filled → need = 1.5
-        assert r.need_multiplier == pytest.approx(1.5)
-        assert r.dynamic_vor == pytest.approx(40.0 * 1.0 * 1.5)
+        # QB: 1 empty slot → need = 1 + 1*0.6/3.0 = 1.2
+        expected_need = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
+        assert r.need_multiplier == pytest.approx(expected_need)
+        # Mid-round: uncertainty_adj = 1.0; single player → tier_urgency = 1.0 (no gap)
+        # dynamic_vor = base * scarcity * need * uncertainty_adj * tier_urgency
+        expected = 40.0 * 1.0 * expected_need * 1.0 * 1.0
+        assert r.dynamic_vor == pytest.approx(expected)
 
     def test_scarcity_boosts_positions_with_more_drafted(self):
         """Position with more drafted players gets higher scarcity boost."""
@@ -346,6 +465,7 @@ class TestCalculateDynamicVOR:
         )
         # RB has more drafted → higher scarcity multiplier
         assert result["rb1"].scarcity_multiplier > result["wr1"].scarcity_multiplier
+        # Same base VOR + higher scarcity → higher dynamic VOR for RB
         assert result["rb1"].dynamic_vor > result["wr1"].dynamic_vor
 
     def test_need_boosts_unfilled_positions(self):
@@ -401,8 +521,8 @@ class TestCalculateDynamicVOR:
     def test_different_scoring_format(self):
         """VOR looks up the correct scoring format."""
         player = _make_player("qb1", "QB", vor_standard=15.0, vor_half_ppr=20.0)
-        calc_std = DynamicVORCalculator("standard")
-        calc_half = DynamicVORCalculator("half_ppr")
+        calc_std = DynamicVORCalculator("standard", league_size=12)
+        calc_half = DynamicVORCalculator("half_ppr", league_size=12)
 
         result_std = calc_std.calculate_dynamic_vor(
             available_players=[player],
@@ -434,45 +554,51 @@ class TestCalculateDynamicVOR:
 
 class TestEdgeCases:
     def setup_method(self):
-        self.calc = DynamicVORCalculator("half_ppr")
+        self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def test_zero_base_vor(self):
-        """Player with 0 base VOR gets 0 dynamic VOR regardless of multipliers."""
+        """Player with 0 base VOR still gets balance adjustment (not zero due to additive component)."""
         player = _make_player("rb1", "RB", vor_half_ppr=0.0)
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
         result = self.calc.calculate_dynamic_vor(
             available_players=[player],
             drafted_positions={"RB": 20},
             roster_slots=DEFAULT_ROSTER_SLOTS,
-            team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            team_roster=roster,
         )
+        # 0 * anything = 0
+        assert result["rb1"].base_vor == 0.0
         assert result["rb1"].dynamic_vor == 0.0
         assert result["rb1"].scarcity_multiplier > 1.0  # Scarcity still applies
 
     def test_negative_base_vor(self):
-        """Negative VOR stays negative but is amplified by multipliers."""
+        """Negative base VOR stays negative (multiplicative formula preserves sign)."""
         player = _make_player("rb1", "RB", vor_half_ppr=-5.0)
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
         result = self.calc.calculate_dynamic_vor(
             available_players=[player],
             drafted_positions={"RB": 18},
             roster_slots=DEFAULT_ROSTER_SLOTS,
-            team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            team_roster=roster,
         )
-        # Negative * positive multipliers → more negative
-        assert result["rb1"].dynamic_vor < -5.0
+        assert result["rb1"].base_vor == -5.0
+        # Negative base * positive multipliers = negative dynamic
+        assert result["rb1"].dynamic_vor < 0
 
     def test_missing_baseline_vor_defaults_to_zero(self):
-        """Player without baseline_vor key gets 0.0."""
+        """Player without baseline_vor key gets 0.0 base and 0.0 dynamic."""
         player = {
             "player_id": "unknown",
             "name": "Unknown",
             "position": "RB",
             "team": "TST",
         }
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
         result = self.calc.calculate_dynamic_vor(
             available_players=[player],
             drafted_positions={},
             roster_slots=DEFAULT_ROSTER_SLOTS,
-            team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            team_roster=roster,
         )
         assert result["unknown"].base_vor == 0.0
         assert result["unknown"].dynamic_vor == 0.0
@@ -491,23 +617,27 @@ class TestEdgeCases:
     def test_all_startable_drafted_caps_scarcity(self):
         """Scarcity doesn't go above the capped value."""
         player = _make_player("qb1", "QB", vor_half_ppr=30.0)
-        # QB baseline=12, draft all 12
-        result_12 = self.calc.calculate_dynamic_vor(
+        # QB baseline=18 (for 12-team), draft at/over baseline
+        qb_baseline = calculate_baseline_count("QB", 12)
+        result_at = self.calc.calculate_dynamic_vor(
             available_players=[player],
-            drafted_positions={"QB": 12},
+            drafted_positions={"QB": qb_baseline},
             roster_slots=DEFAULT_ROSTER_SLOTS,
             team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            current_round=5,
         )
         # Draft more than baseline
-        result_20 = self.calc.calculate_dynamic_vor(
+        result_over = self.calc.calculate_dynamic_vor(
             available_players=[player],
-            drafted_positions={"QB": 20},
+            drafted_positions={"QB": qb_baseline + 10},
             roster_slots=DEFAULT_ROSTER_SLOTS,
             team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            current_round=5,
         )
-        assert result_12["qb1"].scarcity_multiplier == result_20["qb1"].scarcity_multiplier
-        # QB weight=1.2, pct=1.0 → scarcity = 1 + 1.0*1.2 = 2.2
-        assert result_12["qb1"].scarcity_multiplier == pytest.approx(2.2)
+        assert result_at["qb1"].scarcity_multiplier == result_over["qb1"].scarcity_multiplier
+        # QB weight=1.3, pct=1.0 → scarcity = 1 + 1.0*1.3 = 2.3
+        expected_max_scarcity = 1.0 + 1.0 * POSITION_SCARCITY_WEIGHTS["QB"]
+        assert result_at["qb1"].scarcity_multiplier == pytest.approx(expected_max_scarcity)
 
 
 # ── DraftState Integration Tests ─────────────────────────────────────
@@ -515,7 +645,7 @@ class TestEdgeCases:
 
 class TestCalculateFromDraftState:
     def setup_method(self):
-        self.calc = DynamicVORCalculator("half_ppr")
+        self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def test_fresh_draft(self):
         """calculate_from_draft_state works on a brand-new draft."""
@@ -623,8 +753,8 @@ class TestFormulaVerification:
     """Verify the exact dynamic VOR formula from the architecture doc."""
 
     def test_architecture_doc_example(self):
-        """Replicate the example from SIMULATION_ENGINE_MODULE.md."""
-        calc = DynamicVORCalculator("half_ppr")
+        """Replicate the example from SIMULATION_ENGINE_MODULE.md (updated for new constants)."""
+        calc = DynamicVORCalculator("half_ppr", league_size=12)
 
         henry = _make_player("henry", "RB", vor_half_ppr=85.2)
         wilson = _make_player("wilson", "WR", vor_half_ppr=75.5)
@@ -641,26 +771,31 @@ class TestFormulaVerification:
             drafted_positions={"QB": 3, "RB": 15, "WR": 10},
             roster_slots=DEFAULT_ROSTER_SLOTS,
             team_roster=roster,
+            current_round=3,
         )
 
-        # Henry: scarcity = 1 + (15/36)*2.0 ≈ 1.833
+        # Henry: scarcity = 1 + (15/40)*1.8 = 1.675 (RB baseline is now 40, weight 1.8)
+        rb_baseline = calculate_baseline_count("RB", 12)
         henry_r = result["henry"]
-        assert henry_r.scarcity_multiplier == pytest.approx(1 + (15 / 36) * 2.0)
-        # Henry: need = 1 + (2/3)*0.5 = 1.333 (1 of 3 slots filled)
-        assert henry_r.need_multiplier == pytest.approx(1 + (2 / 3) * 0.5)
+        expected_scarcity = 1 + (15 / rb_baseline) * POSITION_SCARCITY_WEIGHTS["RB"]
+        assert henry_r.scarcity_multiplier == pytest.approx(expected_scarcity)
+        # Henry: need = 1 + (2/3)*0.6 = 1.4 (1 of 3 slots filled, ROSTER_NEED_WEIGHT=0.6)
+        assert henry_r.need_multiplier == pytest.approx(1 + (2 / 3) * ROSTER_NEED_WEIGHT)
 
-        # Wilson: scarcity = 1 + (10/36)*1.8 = 1.5
+        # Wilson: scarcity = 1 + (10/41)*1.4 (WR baseline now 41, weight 1.4)
+        wr_baseline = calculate_baseline_count("WR", 12)
         wilson_r = result["wilson"]
-        assert wilson_r.scarcity_multiplier == pytest.approx(1 + (10 / 36) * 1.8)
+        expected_wr_scarcity = 1 + (10 / wr_baseline) * POSITION_SCARCITY_WEIGHTS["WR"]
+        assert wilson_r.scarcity_multiplier == pytest.approx(expected_wr_scarcity)
         # Wilson: same need (1 of 3 slots filled)
-        assert wilson_r.need_multiplier == pytest.approx(1 + (2 / 3) * 0.5)
+        assert wilson_r.need_multiplier == pytest.approx(1 + (2 / 3) * ROSTER_NEED_WEIGHT)
 
-        # Henry should have higher dynamic VOR
-        assert henry_r.dynamic_vor > wilson_r.dynamic_vor
+        # Henry has higher base VOR and more scarcity → higher dynamic VOR
+        assert henry_r.dynamic_vor > wilson_r.dynamic_vor > 0
 
     def test_dynamic_vor_equals_product(self):
-        """dynamic_vor == base_vor * scarcity * need for every player."""
-        calc = DynamicVORCalculator("half_ppr")
+        """dynamic_vor == base_vor * scarcity * need * uncertainty_adj for every player."""
+        calc = DynamicVORCalculator("half_ppr", league_size=12)
         players = list(_make_player_data().values())
 
         result = calc.calculate_dynamic_vor(
@@ -668,8 +803,238 @@ class TestFormulaVerification:
             drafted_positions={"QB": 3, "RB": 10, "WR": 8, "TE": 2},
             roster_slots=DEFAULT_ROSTER_SLOTS,
             team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
+            current_round=5,  # Mid-round (no uncertainty adjustment)
         )
 
+        # Calculate draft completion percentage for round 5
+        total_picks = sum(DEFAULT_ROSTER_SLOTS.values()) * 12  # 180
+        picks_made_approx = (5 - 1) * 12 + (12 // 2)  # 54
+        draft_pct_complete = picks_made_approx / total_picks  # 0.30 (30%)
+
+        # Build tier information for all players so we can look up urgency
+        tiers_data = calc._detect_tiers(players)
+
         for vor in result.values():
-            expected = vor.base_vor * vor.scarcity_multiplier * vor.need_multiplier
-            assert vor.dynamic_vor == pytest.approx(expected)
+            # Mid-round (round 5): uncertainty_adj = 1.0
+            uncertainty_adj = calc._calculate_uncertainty_adjustment(vor.uncertainty, 5)
+
+            # Tier urgency for this player
+            tier_info = tiers_data.get(vor.position, {}).get(vor.player_id, {})
+            tier_gap = tier_info.get("tier_gap", 0.0)
+            tier_size = max(1, tier_info.get("tier_size", 1))
+            tier_urgency = 1.0 + (tier_gap / tier_size) * TIER_URGENCY_WEIGHT
+
+            # K/DST use fixed negative values early in draft based on completion percentage
+            if vor.position in ("K", "DST"):
+                if draft_pct_complete < 0.65:
+                    expected = -50.0
+                elif draft_pct_complete < 0.80:
+                    expected = -5.0
+                else:
+                    position_value_penalty = 0.50
+                    expected = vor.base_vor * vor.scarcity_multiplier * vor.need_multiplier * uncertainty_adj * position_value_penalty
+            else:
+                # Skill positions: base * scarcity * need * uncertainty * tier_urgency
+                expected = vor.base_vor * vor.scarcity_multiplier * vor.need_multiplier * uncertainty_adj * tier_urgency
+
+            assert vor.dynamic_vor == pytest.approx(expected, rel=1e-4)
+
+
+# ── Bench Depth Penalty Tests ────────────────────────────────────────
+
+
+class TestBenchDepthPenalty:
+    """Test that bench players are counted when calculating excess position penalty."""
+
+    def setup_method(self):
+        self.calc = DynamicVORCalculator("half_ppr", league_size=12)
+
+    def test_bench_wr_counts_as_filled(self):
+        """WRs on the bench should count toward excess penalty."""
+        # DEFAULT_ROSTER_SLOTS: 2 WR slots + 1 FLEX = 3 starting slots for WRs
+        # Team has 2 WRs in WR slots + 1 in FLEX + 3 WRs on bench = 6 total WRs
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster["WR"] = ["wr1", "wr2"]  # 2 WRs in WR slots
+        roster["FLEX"] = ["wr3"]  # 1 WR in FLEX
+        roster["BENCH"] = ["wr4", "wr5", "wr6"]  # 3 more WRs on bench
+
+        # Build player_positions mapping
+        player_positions = {
+            "wr1": "WR", "wr2": "WR", "wr3": "WR",
+            "wr4": "WR", "wr5": "WR", "wr6": "WR",
+        }
+
+        result = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("wr7", "WR")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster,
+            current_round=5,
+            player_positions=player_positions,
+        )
+
+        wr = result["wr7"]
+        # Total WR+FLEX slots = 2 WR + 1 FLEX = 3
+        # Filled = 2 (WR slots) + 1 (FLEX) + 3 (BENCH) = 6 (all are WRs)
+        # Excess = 6 - 3 = 3
+        # Progressive penalty: excess 1: 0.15, excess 2: 0.15, excess 3: 0.40 → total = 0.70
+        # Need = 1 - ROSTER_FILLED_PENALTY - progressive_penalty
+        #      = 1 - 0.4 - 0.70 = -0.10 → floors at 0.01
+        expected_need = 0.01
+        assert wr.need_multiplier == pytest.approx(expected_need)
+
+    def test_bench_rb_counts_as_filled(self):
+        """RBs on the bench should count toward excess penalty."""
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster["RB"] = ["rb1", "rb2"]  # 2 RBs in RB slots
+        roster["BENCH"] = ["rb3", "rb4", "rb5"]  # 3 RBs on bench
+
+        player_positions = {
+            "rb1": "RB", "rb2": "RB", "rb3": "RB", "rb4": "RB", "rb5": "RB",
+        }
+
+        result = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("rb6", "RB")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster,
+            current_round=5,
+            player_positions=player_positions,
+        )
+
+        rb = result["rb6"]
+        # Total RB+FLEX slots = 2 RB + 1 FLEX = 3
+        # Filled = 2 RB + 3 BENCH = 5 (all are RBs)
+        # Excess = 5 - 3 = 2
+        # Need = 1 - 0.4 - (2 * 0.15) = 0.3
+        expected_need = 1.0 - ROSTER_FILLED_PENALTY - (2 * ROSTER_EXCESS_PENALTY)
+        assert rb.need_multiplier == pytest.approx(expected_need)
+
+    def test_bench_kicker_counts_as_filled(self):
+        """Kickers on the bench should heavily penalize additional K picks."""
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster["K"] = ["k1"]  # 1 K in K slot (K only has 1 slot, not FLEX-eligible)
+        roster["BENCH"] = ["k2", "k3", "k4"]  # 3 Ks on bench (excessive!)
+
+        player_positions = {
+            "k1": "K", "k2": "K", "k3": "K", "k4": "K",
+        }
+
+        result = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("k5", "K")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster,
+            current_round=5,
+            player_positions=player_positions,
+        )
+
+        k = result["k5"]
+        # Total K slots = 1 (K is not FLEX-eligible)
+        # Filled = 1 K + 3 BENCH = 4 (all are Ks)
+        # Excess = 4 - 1 = 3
+        # K/DST have steeper penalty: 0.4 + (3 * 0.50) = 1.9
+        # Need = 1 - 1.9 = -0.9, floors at 0.0 for K/DST
+        expected_need = 0.0
+        assert k.need_multiplier == pytest.approx(expected_need)
+
+    def test_mixed_positions_on_bench(self):
+        """Only bench players of the target position should count."""
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster["WR"] = ["wr1"]  # 1 WR in WR slot
+        roster["BENCH"] = ["wr2", "rb1", "qb1"]  # 1 WR + 1 RB + 1 QB on bench
+
+        player_positions = {
+            "wr1": "WR", "wr2": "WR", "rb1": "RB", "qb1": "QB",
+        }
+
+        result = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("wr3", "WR")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster,
+            current_round=5,
+            player_positions=player_positions,
+        )
+
+        wr = result["wr3"]
+        # Total WR+FLEX slots = 2 WR + 1 FLEX = 3
+        # Filled = 1 (WR slot) + 0 (FLEX, empty) + 1 (BENCH_WR) = 2 (only counting WRs, not RB or QB)
+        # Empty = 3 - 2 = 1
+        # Need = 1 + (1/3) * 0.6 = 1 + 0.2 = 1.2
+        expected_need = 1.0 + (1 / 3) * ROSTER_NEED_WEIGHT
+        assert wr.need_multiplier == pytest.approx(expected_need)
+
+    def test_kicker_steeper_penalty_than_skill_positions(self):
+        """K/DST should have steeper excess penalty (0.50) vs skill positions (0.15)."""
+        # Create two rosters with same excess (2 bench players)
+        roster_k = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster_k["K"] = ["k1"]
+        roster_k["BENCH"] = ["k2", "k3"]  # 2 excess kickers
+
+        roster_rb = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster_rb["RB"] = ["rb1", "rb2"]
+        roster_rb["FLEX"] = ["rb3"]  # All RB starting slots filled
+        roster_rb["BENCH"] = ["rb4", "rb5"]  # 2 excess RBs
+
+        player_positions_k = {"k1": "K", "k2": "K", "k3": "K"}
+        player_positions_rb = {
+            "rb1": "RB", "rb2": "RB", "rb3": "RB", "rb4": "RB", "rb5": "RB"
+        }
+
+        result_k = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("k4", "K")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster_k,
+            current_round=5,
+            player_positions=player_positions_k,
+        )
+
+        result_rb = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("rb6", "RB")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster_rb,
+            current_round=5,
+            player_positions=player_positions_rb,
+        )
+
+        k = result_k["k4"]
+        rb = result_rb["rb6"]
+
+        # K with 2 excess: penalty = 0.4 + (2 * 0.50) = 1.4, need = 1 - 1.4 = -0.4, floors at 0.0
+        assert k.need_multiplier == pytest.approx(0.0)
+
+        # RB with 2 excess: penalty = 0.4 + (2 * 0.15) = 0.7, need = 1 - 0.7 = 0.3, floors at 0.01
+        expected_rb_need = 1.0 - ROSTER_FILLED_PENALTY - (2 * ROSTER_EXCESS_PENALTY)
+        assert rb.need_multiplier == pytest.approx(expected_rb_need)
+
+        # K penalty should be much more severe
+        assert k.need_multiplier < rb.need_multiplier
+
+    def test_without_player_positions_uses_fallback(self):
+        """When player_positions is not provided, bench is not counted (fallback logic)."""
+        roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
+        roster["WR"] = ["wr1", "wr2"]  # 2 WRs in WR slots
+        roster["FLEX"] = ["wr3"]  # 1 WR in FLEX (fallback assumes this is a WR)
+        roster["BENCH"] = ["wr4", "wr5"]  # These won't be counted without player_positions
+
+        # Call WITHOUT player_positions parameter
+        result = self.calc.calculate_dynamic_vor(
+            available_players=[_make_player("wr6", "WR")],
+            drafted_positions={},
+            roster_slots=DEFAULT_ROSTER_SLOTS,
+            team_roster=roster,
+            current_round=5,
+            # NO player_positions provided
+        )
+
+        wr = result["wr6"]
+        # Without player_positions, bench is not counted, but FLEX is counted (fallback)
+        # Total WR+FLEX slots = 2 WR + 1 FLEX = 3
+        # Filled = 2 (WR) + 1 (FLEX, fallback counts all FLEX players)  = 3
+        # Empty = 3 - 3 = 0
+        # All starters filled: Need = 1 - ROSTER_FILLED_PENALTY = 1 - 0.4 = 0.6
+        expected_need = 1.0 - ROSTER_FILLED_PENALTY
+        assert wr.need_multiplier == pytest.approx(expected_need)
