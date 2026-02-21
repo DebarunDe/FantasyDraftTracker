@@ -55,7 +55,7 @@ class DraftDisplay:
         slot = pick.slot or pos
 
         body = (
-            f"  PICK #{pick.pick_number}: [bold]{player_info['name']}[/bold] "
+            f"  PICK #{pick.pick_number}: [bold]{player_info.get('name', '?')}[/bold] "
             f"([{color}]{pos}[/{color}] - {nfl_team})\n"
             f"  {team_name}  |  Round {pick.round}  |  Slot: {slot}"
         )
@@ -137,8 +137,9 @@ class DraftDisplay:
             bye_str = str(bye) if bye is not None else "-"
 
             vor_val = ""
-            if vor_results and player["player_id"] in vor_results:
-                vor_val = f"{vor_results[player['player_id']].dynamic_vor:.1f}"
+            player_id = player.get("player_id")
+            if vor_results and player_id and player_id in vor_results:
+                vor_val = f"{vor_results[player_id].dynamic_vor:.1f}"
             else:
                 base_vor = player.get("baseline_vor", {}).get(scoring_format, 0)
                 vor_val = f"{base_vor:.1f}"
@@ -269,7 +270,7 @@ class DraftDisplay:
         table.add_column("Dyn VOR", justify="right", width=8)
 
         displayed = []
-        for i, vor in enumerate(sorted_results, 1):
+        for vor in sorted_results:
             info = player_data.get(vor.player_id, {})
             if not info:
                 continue
@@ -277,15 +278,15 @@ class DraftDisplay:
             color = POSITION_COLORS.get(pos, "white")
             proj = info.get("projections", {}).get(scoring_format, 0)
 
+            displayed.append(info)
             table.add_row(
-                str(i),
+                str(len(displayed)),
                 info.get("name", "?"),
                 f"[{color}]{pos}[/{color}]",
                 info.get("team", "?"),
                 f"{proj:.1f}",
                 f"{vor.dynamic_vor:.1f}",
             )
-            displayed.append(info)
 
         self.console.print(table)
         return displayed
@@ -321,7 +322,7 @@ class DraftDisplay:
             tag = "[bold green](Your Team)[/bold green]" if team.get("is_human") else ""
             table.add_row(
                 str(rank),
-                team["team_name"],
+                team.get("team_name", "Unknown"),
                 f"{team.get('projected_points', 0):,.1f}",
                 tag,
             )

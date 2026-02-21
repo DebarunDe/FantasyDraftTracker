@@ -86,7 +86,8 @@ class DraftApp:
         """Initialize controller, VOR calculator, and searcher."""
         self.controller = DraftController(self.draft_state)
         self.vor_calculator = DynamicVORCalculator(
-            self.draft_state.league_config.scoring_format
+            self.draft_state.league_config.scoring_format,
+            self.draft_state.league_config.league_size,
         )
         self.searcher = PlayerSearcher(self.controller)
 
@@ -203,12 +204,15 @@ class DraftApp:
         pos = player.get("position", "?")
         team = player.get("team", "?")
 
-        raw = self.console.input(
-            f"  Draft [bold]{name}[/bold] ({pos} - {team})? [Y/n]: "
-        ).strip().lower()
+        try:
+            raw = self.console.input(
+                f"  Draft [bold]{name}[/bold] ({pos} - {team})? [Y/n]: "
+            ).strip().lower()
+        except EOFError:
+            return None
 
         if raw in ("", "y", "yes"):
-            return player["player_id"]
+            return player.get("player_id")
         return None
 
     def _execute_pick(self, player_id: str) -> None:
@@ -370,9 +374,12 @@ class DraftApp:
         self.console.print()
 
         while True:
-            raw = self.console.input(
-                "View team roster? [team #/all/quit]: "
-            ).strip().lower()
+            try:
+                raw = self.console.input(
+                    "View team roster? [team #/all/quit]: "
+                ).strip().lower()
+            except EOFError:
+                break
 
             if raw in ("q", "quit", ""):
                 break

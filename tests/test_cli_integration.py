@@ -100,7 +100,7 @@ def _make_app_with_draft(responses):
         player_data=player_data,
     )
     app.controller = DraftController(app.draft_state)
-    app.vor_calculator = DynamicVORCalculator("half_ppr")
+    app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=4)
     app.searcher = PlayerSearcher(app.controller)
     app.persistence = MagicMock(spec=StatePersistence)
 
