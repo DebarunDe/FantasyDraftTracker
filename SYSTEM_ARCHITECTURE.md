@@ -151,17 +151,25 @@ Draft Manager: Get Current Team
 **Responsibilities**:
 - Calculate dynamic VOR based on current draft state
 - Run Monte Carlo simulations for pick scenarios
-- Generate pick recommendations for human users
-- Make picks for computer teams
+- Generate pick recommendations for human users (pure VOR — strategically optimal)
+- Make picks for computer teams (ADP-blended scoring — simulates realistic human behavior)
 - Evaluate expected team value across simulations
 
 **Stateless**: All functions receive draft state as input
 
 **Key Classes**:
-- `VORCalculator`: Dynamic value calculations
+- `DynamicVORCalculator`: Dynamic value calculations used for human recommendations
 - `MonteCarloSimulator`: Draft outcome simulations
-- `PickRecommender`: User-facing recommendations
-- `ComputerDrafter`: AI opponent logic
+- `PickRecommender`: User-facing recommendations (pure VOR)
+- `ComputerDrafter`: AI opponent logic with configurable ADP-blending strategies
+
+**Signal Split Design**:
+- Human recommendations use **pure dynamic VOR** — the strategically optimal signal,
+  with no ADP influence.
+- Computer opponents use **ADP-blended composite scoring** to simulate realistic
+  draft room behavior. The blend weight is configurable per strategy. The ADP
+  signal is sourced from `overall_rank` (FantasyPros ECR) already present in every
+  player record.
 
 ### Data Pipeline (`src/data_pipeline/`)
 **Purpose**: Transform raw FantasyPros data into usable format
@@ -208,13 +216,29 @@ Draft Manager: Get Current Team
     "position": "WR",
     "team": "MIN",
     "bye_week": 13,
-    "adp": 2.8,  # Average Draft Position
-    "adp_std_dev": 1.2,  # Draft variance
-    "expert_consensus_rank": 3,
-    "value_score": 197.2,  # Derived from ADP (200 - ADP)
-    "baseline_vor": 72.2   # Value over replacement
+    "overall_rank": 3,        # FantasyPros Expert Consensus Rank (ECR) — serves as
+                               # the ADP signal for computer drafter blending.
+                               # Lower number = higher consensus draft value.
+    "position_rank": 2,        # ECR rank within position (e.g., WR2)
+    "tier": 1,                 # FantasyPros consensus tier
+    "projections": {
+        "standard": 195.0,
+        "half_ppr": 225.0,
+        "full_ppr": 255.0
+    },
+    "baseline_vor": {
+        "standard": 62.4,
+        "half_ppr": 72.2,
+        "full_ppr": 81.9
+    }
 }
 ```
+
+> **Note on ADP signal**: `overall_rank` is the FantasyPros ECR, written into
+> `players_{year}.json` by the data pipeline. No additional data source is needed for
+> computer drafter ADP blending. Earlier design sketches referred to `adp`,
+> `adp_std_dev`, and `value_score` — those fields are not in the actual pipeline output;
+> `overall_rank` is the correct field name.
 
 ### Draft State
 ```python
@@ -763,23 +787,58 @@ python -m src.ui.cli
 
 ---
 
-#### MILESTONE 9: Simple Computer Drafter
-**Goal**: AI opponents that pick based on VOR
+#### MILESTONE 9: Computer Drafter with ADP-Blended Strategies
+**Goal**: AI opponents that pick using configurable VOR+ADP composite scoring
+
+**Background**: Pure VOR systematically under-ranks WRs (avg. 28 positions below ADP
+consensus) and over-ranks RBs (+11 positions vs. consensus). For human recommendations,
+pure VOR is correct (strategically optimal). For computer opponents, a blend of VOR and
+ADP (from `overall_rank` / ECR) produces realistic draft behavior that matches how actual
+fantasy players draft.
+
+**ADP blend formula (rank fusion)**:
+```python
+total_players = len(available_players)
+vor_score = 1 - (vor_rank - 1) / total_players    # 1.0 = best VOR
+adp_score = 1 - (adp_rank - 1) / total_players    # 1.0 = best ADP (overall_rank)
+composite = (1 - adp_weight) * vor_score + adp_weight * adp_score
+# adp_weight=0.0 → pure VOR, 0.4 → balanced, 0.7 → consensus, 1.0 → pure ADP
+```
+
+**Strategies**:
+- `"vor_only"` — pure dynamic VOR, adp_weight=0.0 (mathematically optimal, RB-heavy)
+- `"balanced"` — 60% VOR + 40% ADP, adp_weight=0.4 (default, realistic distributions)
+- `"consensus"` — 30% VOR + 70% ADP, adp_weight=0.7 (consensus follower)
+- `"contrarian"` — pure VOR + random noise, adp_weight=0.0, noise=0.15 (exploits ADP inefficiencies)
 
 **Success Criteria**:
-- Computer teams make legal picks
-- Picks are reasonable (high VOR players)
-- Draft completes without errors
+- Computer teams make legal picks across all strategies
+- `"balanced"` drafters produce position distributions close to real ADP consensus
+- `"vor_only"` drafters are RB-heavy early (expected, correct VOR behavior)
+- `"contrarian"` drafters vary each simulation run (randomness verified)
+- All strategies complete a full draft without errors across 8/10/12/14-team leagues
 
 **Validation**:
 ```python
 from src.simulation_engine.computer_drafter import ComputerDrafter
 
-computer = ComputerDrafter(vor_calculator=vor_calc, strategy="fast")
+# Default balanced strategy
+computer = ComputerDrafter(vor_calculator=vor_calc, strategy="balanced")
 pick = computer.make_pick(draft_state, available_players, team_id=1)
 
 assert pick in [p['player_id'] for p in available_players]
-print(f"✓ Computer picked: {draft_state.get_player_info(pick)['name']}")
+print(f"✓ Computer (balanced) picked: {draft_state.get_player_info(pick)['name']}")
+
+# Verify ADP signal field is present
+player = draft_state.get_player_info(pick)
+assert 'overall_rank' in player, "overall_rank must exist for ADP blending"
+
+# All four strategies must produce valid picks
+for strategy in ["vor_only", "balanced", "consensus", "contrarian"]:
+    c = ComputerDrafter(vor_calculator=vor_calc, strategy=strategy)
+    p = c.make_pick(draft_state, available_players, team_id=1)
+    assert p in [pl['player_id'] for pl in available_players]
+    print(f"✓ Strategy '{strategy}' picks correctly")
 ```
 
 ---
@@ -905,7 +964,7 @@ pytest tests/ --cov=src --cov-report=html
 ---
 
 ## Document Version
-- **Version**: 1.1
-- **Last Updated**: 2024-08-15
+- **Version**: 1.2
+- **Last Updated**: 2026-02-21
 - **Author**: System Architect
-- **Status**: Approved for MVP Development
+- **Status**: Updated for M9 ADP-Blended Computer Drafter
