@@ -70,7 +70,7 @@ def _make_player_data():
     return players
 
 
-def _make_app_with_draft(responses):
+def _make_app_with_draft(responses, draft_mode="simulation"):
     """Create a DraftApp with a pre-initialized 2-team draft and mocked input.
 
     The draft has 2 teams, 3 rounds (QB, RB, WR), 6 total picks.
@@ -79,7 +79,6 @@ def _make_app_with_draft(responses):
     console = Console(file=output, width=120, force_terminal=True)
 
     response_iter = iter(responses)
-    original_input = console.input
 
     def mock_input(prompt=""):
         try:
@@ -92,7 +91,7 @@ def _make_app_with_draft(responses):
     app = DraftApp(console=console)
 
     # Pre-initialize draft to skip setup wizard
-    config = _make_league_config()
+    config = _make_league_config(draft_mode=draft_mode)
     player_data = _make_player_data()
     app.draft_state = DraftState.create_new(
         league_config=config,
@@ -452,3 +451,174 @@ class TestSimulateCommand:
         text = output.getvalue()
 
         assert "sim" in text
+
+
+# ── Manual tracker mode tests ────────────────────────────────────────
+
+
+class TestManualTrackerMode:
+    """Tests for Manual Draft Tracker mode (draft_mode='manual_tracker').
+
+    In this mode the user enters every pick — no team auto-picks.
+    Snake order for 2 teams: T0, T1, T1, T0, T0, T1
+    """
+
+    def test_is_manual_tracker_property(self):
+        """_is_manual_tracker is True when draft_mode is manual_tracker."""
+        app, _ = _make_app_with_draft([], draft_mode="manual_tracker")
+        assert app._is_manual_tracker is True
+
+    def test_is_manual_tracker_false_in_simulation(self):
+        """_is_manual_tracker is False in simulation mode."""
+        app, _ = _make_app_with_draft([])
+        assert app._is_manual_tracker is False
+
+    def test_cpu_team_does_not_auto_pick(self):
+        """In manual tracker mode, CPU team's turn waits for user input."""
+        # Snake order pick 1 = T0 (human). After human picks, pick 2 = T1 (CPU).
+        # In manual tracker, pick 2 should also require user input, not auto-pick.
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen", "y",    # Pick 1: My Team (human)
+                "Jalen Hurts", "y",   # Pick 2: CPU Team (manual tracker — user enters it)
+            ],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()  # Pick 1
+        app._handle_pick_turn()  # Pick 2 — must consume user input, not auto-pick
+
+        assert app.draft_state.current_pick == 3
+        assert len(app.draft_state.all_picks) == 2
+
+    def test_complete_draft_all_manual(self):
+        """Full 2-team, 3-round draft with all picks entered manually.
+
+        Snake order: T0, T1, T1, T0, T0, T1 — 6 picks total.
+        """
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen", "y",      # Pick 1: T0
+                "Jalen Hurts", "y",     # Pick 2: T1
+                "Saquon Barkley", "y",  # Pick 3: T1
+                "Breece Hall", "y",     # Pick 4: T0
+                "Ja'Marr Chase", "y",   # Pick 5: T0
+                "CeeDee Lamb", "y",     # Pick 6: T1
+            ],
+            draft_mode="manual_tracker",
+        )
+
+        app._draft_loop()
+
+        assert app.controller.is_complete
+        assert len(app.draft_state.all_picks) == 6
+
+    def test_recommendations_shown_for_human_team(self):
+        """VOR recommendations are shown when it is the human team's turn."""
+        app, output = _make_app_with_draft(
+            ["Josh Allen", "y"],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()  # Pick 1: T0 (human)
+        text = output.getvalue()
+
+        assert "Recommendations" in text
+
+    def test_recommendations_not_shown_for_cpu_team(self):
+        """For non-human teams in manual tracker, available list shown (not recommendations)."""
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen", "y",   # Pick 1: T0 (human) — recs shown
+                "Jalen Hurts", "y",  # Pick 2: T1 (not human) — available list shown
+            ],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()  # Pick 1
+        output.truncate(0)
+        output.seek(0)
+
+        app._handle_pick_turn()  # Pick 2: CPU team's turn in manual tracker
+        text = output.getvalue()
+
+        assert "Recommendations" not in text
+        assert "Available Players" in text
+
+    def test_header_shows_manual_tracker_label(self):
+        """Draft header includes 'Manual Tracker' indicator."""
+        app, output = _make_app_with_draft(
+            ["Josh Allen", "y"],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()
+        text = output.getvalue()
+
+        assert "Manual Tracker" in text
+
+    def test_sim_command_disabled(self):
+        """'sim' command shows error in manual tracker mode instead of simulating."""
+        app, output = _make_app_with_draft(
+            ["sim", "Josh Allen", "y"],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()
+        text = output.getvalue()
+
+        # Should not have completed the draft — sim was rejected
+        assert app.draft_state.current_pick == 2  # Only 1 pick made
+        assert "not available in Manual Tracker" in text
+
+    def test_pick_by_number_for_cpu_team(self):
+        """User can pick by number for a non-human team (available list is auto-shown)."""
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen", "y",  # Pick 1: T0 (human)
+                "1", "y",           # Pick 2: T1 (CPU) — pick #1 from available list
+            ],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()  # Pick 1
+        app._handle_pick_turn()  # Pick 2 — must NOT error "no player list"
+
+        assert app.draft_state.current_pick == 3
+        assert len(app.draft_state.all_picks) == 2
+
+    def test_vor_recommendations_update_after_picks(self):
+        """VOR recommendations are recalculated after each pick."""
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen", "y",   # Pick 1: T0
+                "Jalen Hurts", "y",  # Pick 2: T1
+                "rec",               # Check updated recs on T1's second turn (pick 3)
+                "Saquon Barkley", "y",
+            ],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()  # Pick 1
+        app._handle_pick_turn()  # Pick 2
+        app._handle_pick_turn()  # Pick 3: T1 again (snake), user checks rec then picks
+
+        # Both QBs are gone; RB should now lead recommendations
+        text = output.getvalue()
+        assert "Recommendations" in text
+        assert len(app.draft_state.all_picks) == 3
+
+    def test_auto_save_after_each_pick(self):
+        """persistence.save_draft is called after every manual pick."""
+        app, _ = _make_app_with_draft(
+            [
+                "Josh Allen", "y",   # Pick 1
+                "Jalen Hurts", "y",  # Pick 2
+            ],
+            draft_mode="manual_tracker",
+        )
+
+        app._handle_pick_turn()
+        app._handle_pick_turn()
+
+        assert app.persistence.save_draft.call_count == 2

@@ -72,6 +72,7 @@ class DraftApp:
             roster_slots=config["roster_slots"],
             team_names=config["team_names"],
             human_team_id=config["human_team_id"],
+            draft_mode=config.get("draft_mode", "simulation"),
             data_year=config["data_year"],
         )
         self._init_components()
@@ -99,6 +100,14 @@ class DraftApp:
         )
         self.searcher = PlayerSearcher(self.controller)
 
+    @property
+    def _is_manual_tracker(self) -> bool:
+        """True when the current draft is in Manual Tracker mode."""
+        return (
+            self.draft_state is not None
+            and self.draft_state.league_config.draft_mode == "manual_tracker"
+        )
+
     def _draft_loop(self) -> bool:
         """Main draft pick loop. Returns True if the user quit mid-draft."""
         while not self.controller.is_complete:
@@ -110,10 +119,20 @@ class DraftApp:
         """Handle a single pick turn. Returns False if user quit."""
         current_team = self.draft_state.get_current_team()
 
+        if self._is_manual_tracker:
+            # In manual tracker mode the user enters every pick (no auto-picking).
+            # Show recommendations only when it is the tracked team's turn.
+            self._show_draft_board(show_recommendations=current_team.is_human)
+            player_id = self._get_user_pick()
+            if player_id is None:
+                return False
+            self._execute_pick(player_id)
+            return True
+
         if not current_team.is_human:
             return self._handle_computer_turn()
 
-        # Human turn: show full board and wait for input
+        # Human turn (simulation mode): show full board and wait for input
         self._show_draft_board()
         player_id = self._get_user_pick()
         if player_id is None:
@@ -154,7 +173,7 @@ class DraftApp:
         self._execute_pick(player_id)
         return True
 
-    def _show_draft_board(self) -> None:
+    def _show_draft_board(self, show_recommendations: bool = True) -> None:
         """Display current draft board."""
         self.last_displayed_players = []
         self.console.print()
@@ -167,7 +186,12 @@ class DraftApp:
                 self.draft_state.teams,
             )
 
-        self._show_recommendations()
+        if show_recommendations:
+            self._show_recommendations()
+        else:
+            # No recommendations for this team, but still populate a numbered
+            # player list so the user can pick by number.
+            self._handle_available("", self.draft_state.league_config.scoring_format)
 
         self.console.print()
         self.console.print(
@@ -319,6 +343,11 @@ class DraftApp:
             return None
 
         if command in ("sim", "simulate"):
+            if self._is_manual_tracker:
+                self.display.show_error(
+                    "'sim' is not available in Manual Tracker mode."
+                )
+                return None
             return self._simulate_rest_of_draft()
 
         return None

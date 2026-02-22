@@ -34,6 +34,11 @@ class DraftDisplay:
             draft_state.league_config.scoring_format,
         )
         human_tag = "  [bold green]\\[YOU][/bold green]" if team.is_human else ""
+        mode_tag = (
+            "  [dim]| Manual Tracker[/dim]"
+            if draft_state.league_config.draft_mode == "manual_tracker"
+            else ""
+        )
 
         title = (
             f"Round {draft_state.current_round}, "
@@ -43,7 +48,7 @@ class DraftDisplay:
         body = (
             f"  On the Clock: [bold]{team.team_name}[/bold]{human_tag}\n"
             f"  {scoring}  |  {draft_state.league_config.league_size} Teams  "
-            f"|  {total_rounds} Rounds"
+            f"|  {total_rounds} Rounds{mode_tag}"
         )
         self.console.print(Panel(body, title=title, border_style="bright_blue"))
 
