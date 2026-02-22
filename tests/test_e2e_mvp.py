@@ -20,7 +20,7 @@ Test classes:
   TestEdgeCases               — error recovery, corrupt saves, boundary inputs
 """
 
-import json
+import re
 import tempfile
 from io import StringIO
 from pathlib import Path
@@ -1338,8 +1338,12 @@ class TestEdgeCases:
             "1", "y",
         ])
         app._draft_loop()
-        text = output.getvalue()
-        assert "No player at #99" in text or app.controller.is_complete
+        # Rich highlights numbers with ANSI codes, so strip them before checking.
+        clean = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        # Verify error message shown for invalid input
+        assert "No player at #99" in clean or "invalid" in clean.lower()
+        # Draft should still complete after recovery
+        assert app.controller.is_complete
 
     def test_help_command_shows_all_commands(self):
         app, output = _make_cli_app([
