@@ -78,6 +78,7 @@ class SetupWizard:
         self.console.print("[bold]-- League Configuration --[/bold]")
         self.console.print()
 
+        draft_mode = self._configure_draft_mode()
         league_size = self._configure_league_size()
         scoring_format = self._configure_scoring_format()
         roster_slots = self._configure_roster_slots()
@@ -89,10 +90,16 @@ class SetupWizard:
         total_rounds = sum(roster_slots.values())
         total_picks = league_size * total_rounds
         scoring_name = SCORING_DISPLAY_NAMES.get(scoring_format, scoring_format)
+        mode_display = (
+            "Simulation (AI opponents auto-pick)"
+            if draft_mode == "simulation"
+            else "Manual Tracker (record all picks manually)"
+        )
 
         self.console.print()
         roster_str = " ".join(f"{k}:{v}" for k, v in roster_slots.items())
         body = (
+            f"  Mode: {mode_display}\n"
             f"  League Size: {league_size}\n"
             f"  Scoring: {scoring_name}\n"
             f"  Your Team: {team_names[human_team_id]} (Pick #{human_team_id + 1})\n"
@@ -107,6 +114,7 @@ class SetupWizard:
         if confirm in ("", "y", "yes"):
             return {
                 "action": "new",
+                "draft_mode": draft_mode,
                 "league_size": league_size,
                 "scoring_format": scoring_format,
                 "roster_slots": roster_slots,
@@ -115,6 +123,23 @@ class SetupWizard:
                 "data_year": data_year,
             }
         return None
+
+    def _configure_draft_mode(self) -> str:
+        """Prompt for draft mode: simulation or manual tracker."""
+        self.console.print("  Draft Mode:")
+        self.console.print(
+            "    1. Simulation       - AI opponents auto-pick (recommended)"
+        )
+        self.console.print(
+            "    2. Manual Tracker   - Record every pick yourself (for live drafts)"
+        )
+        while True:
+            raw = self.console.input("  Select [1-2] (1): ").strip()
+            if raw in ("", "1"):
+                return "simulation"
+            if raw == "2":
+                return "manual_tracker"
+            self.console.print("[red]  Please enter 1 or 2.[/red]")
 
     def _configure_league_size(self) -> int:
         """Prompt for league size."""

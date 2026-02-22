@@ -457,6 +457,49 @@ class TestResumeMenu:
         assert "to delete a draft" in text
 
 
+# ── Draft mode tests ────────────────────────────────────────────────
+
+
+class TestConfigureDraftMode:
+    def test_default_returns_simulation(self):
+        wizard, _ = _make_wizard([""])
+        result = wizard._configure_draft_mode()
+        assert result == "simulation"
+
+    def test_option_1_returns_simulation(self):
+        wizard, _ = _make_wizard(["1"])
+        result = wizard._configure_draft_mode()
+        assert result == "simulation"
+
+    def test_option_2_returns_manual_tracker(self):
+        wizard, _ = _make_wizard(["2"])
+        result = wizard._configure_draft_mode()
+        assert result == "manual_tracker"
+
+    def test_rejects_invalid_then_accepts(self):
+        wizard, _ = _make_wizard(["3", "x", "2"])
+        result = wizard._configure_draft_mode()
+        assert result == "manual_tracker"
+
+    def test_confirmation_panel_shows_mode(self):
+        """Confirmation panel includes the mode display string."""
+        responses = [
+            "1",   # New Draft
+            "2",   # Manual Tracker
+            "",    # League size default
+            "",    # Scoring default
+            "",    # Roster default
+            "",    # Team names default
+            "",    # Draft position default
+            "",    # Data year default
+            "Y",   # Confirm
+        ]
+        wizard, output = _make_wizard(responses)
+        wizard.run()
+        text = output.getvalue()
+        assert "Manual Tracker" in text
+
+
 # ── Full new draft flow test ─────────────────────────────────────────
 
 
@@ -465,6 +508,7 @@ class TestNewDraftFlow:
         """Walk through new draft setup with all defaults."""
         responses = [
             "1",   # New Draft
+            "",    # Default draft mode (simulation)
             "",    # Default league size (12)
             "",    # Default scoring (half_ppr)
             "",    # Default roster (Y)
@@ -477,16 +521,37 @@ class TestNewDraftFlow:
         result = wizard.run()
 
         assert result["action"] == "new"
+        assert result["draft_mode"] == "simulation"
         assert result["league_size"] == 12
         assert result["scoring_format"] == "half_ppr"
         assert result["human_team_id"] == 0
         assert len(result["team_names"]) == 12
         assert result["data_year"] == 2025
 
+    def test_new_draft_manual_tracker_mode(self):
+        """Selecting mode 2 sets draft_mode to manual_tracker."""
+        responses = [
+            "1",   # New Draft
+            "2",   # Manual Tracker mode
+            "",    # Default league size (12)
+            "",    # Default scoring (half_ppr)
+            "",    # Default roster (Y)
+            "",    # Auto team names (Y)
+            "",    # Default position (1)
+            "",    # Default year (2025)
+            "Y",   # Confirm
+        ]
+        wizard, _ = _make_wizard(responses)
+        result = wizard.run()
+
+        assert result["action"] == "new"
+        assert result["draft_mode"] == "manual_tracker"
+
     def test_new_draft_cancel_goes_back(self):
         """Cancelling at confirmation returns to main menu."""
         responses = [
             "1",   # New Draft
+            "",    # Default draft mode
             "",    # Default league size
             "",    # Default scoring
             "",    # Default roster
