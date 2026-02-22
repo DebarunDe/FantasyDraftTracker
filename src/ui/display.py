@@ -348,6 +348,7 @@ class DraftDisplay:
             "  [cyan]rec[/cyan]             Show VOR recommendations\n"
             "  [cyan]b[/cyan] / [cyan]board[/cyan]      Re-display draft board\n"
             "  [cyan]save[/cyan]            Save draft state\n"
+            "  [cyan]sim[/cyan]             Simulate all remaining picks automatically\n"
             "  [cyan]h[/cyan] / [cyan]help[/cyan]       Show this help\n"
             "  [cyan]q[/cyan] / [cyan]quit[/cyan]       Save and quit"
         )

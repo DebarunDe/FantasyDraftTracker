@@ -36,4 +36,5 @@ COMMANDS = {
     "q", "quit",
     "b", "board",
     "save",
+    "sim", "simulate",
 }

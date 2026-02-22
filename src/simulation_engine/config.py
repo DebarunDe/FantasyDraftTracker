@@ -70,9 +70,27 @@ TIER_GAP_THRESHOLD = 0.15  # 15% VOR drop between adjacent players = tier bounda
 # Example: Saquon in RB Tier 1 of 23 (24% gap): urgency = 1 + 0.24/23 × 1.5 = 1.016
 TIER_URGENCY_WEIGHT = 1.5
 
-# Computer drafter parameters
-COMPUTER_STRATEGY = "fast"  # "optimal", "fast", "balanced"
-COMPUTER_PERSONALITY_VARIANCE = 0.05  # +/- 5% randomness
+# ── Computer drafter parameters ───────────────────────────────────────────────
+# ADP-blended composite scoring for realistic AI opponents.
+# Human recommendations use pure VOR; computer opponents blend VOR + ADP signal.
+# The ADP signal is player['overall_rank'] (FantasyPros ECR) — already in the
+# player JSON from the data pipeline. No new data source is needed.
+
+COMPUTER_STRATEGY            = "balanced"  # Default for all computer teams
+COMPUTER_PERSONALITY_VARIANCE = 0.05       # Reserved for future use
+
+# Default ADP blend weight (0.0 = pure VOR, 1.0 = pure ADP)
+COMPUTER_ADP_WEIGHT = 0.4    # 60% VOR + 40% ADP → realistic human-like drafting
+
+# Per-strategy ADP blend weights.
+# ComputerDrafter.__init__ looks up strategy name here when no explicit
+# adp_weight is provided.
+ADP_BLEND_STRATEGIES = {
+    "vor_only":   0.0,   # Pure dynamic VOR (optimal but RB-heavy)
+    "balanced":   0.4,   # 60% VOR + 40% ADP (default — realistic)
+    "consensus":  0.7,   # 30% VOR + 70% ADP (consensus follower)
+    "contrarian": 0.0,   # Pure VOR + ±15% uniform noise (exploits ADP inefficiencies)
+}
 
 # Performance tuning
 CANDIDATE_POOL_SIZE = 15  # Top N players to run MC simulations on

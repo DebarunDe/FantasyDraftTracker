@@ -7,9 +7,10 @@ from rich.console import Console
 
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_initializer import DraftInitializer
-from src.draft_manager.draft_rules import ValidationError
+from src.draft_manager.draft_rules import DraftRules, ValidationError
 from src.draft_manager.draft_state import DraftState
 from src.draft_manager.state_persistence import StatePersistence
+from src.simulation_engine.computer_drafter import ComputerDrafter
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.config import AVAILABLE_PLAYERS_DEFAULT_LIMIT, VOR_RECOMMENDATIONS_COUNT
 from src.ui.display import DraftDisplay
@@ -29,35 +30,38 @@ class DraftApp:
         self.draft_state: Optional[DraftState] = None
         self.controller: Optional[DraftController] = None
         self.vor_calculator: Optional[DynamicVORCalculator] = None
+        self.computer_drafter: Optional[ComputerDrafter] = None
         self.searcher: Optional[PlayerSearcher] = None
         self.last_displayed_players: List[Dict] = []
 
     def run(self) -> None:
         """Main application entry point."""
-        wizard = SetupWizard(self.console, self.persistence)
-        result = wizard.run()
+        while True:
+            wizard = SetupWizard(self.console, self.persistence)
+            result = wizard.run()
 
-        if result["action"] == "quit":
-            self.console.print("Goodbye!")
-            return
+            if result["action"] == "quit":
+                self.console.print("Goodbye!")
+                return
 
-        if result["action"] == "new":
-            self._create_new_draft(result)
-        elif result["action"] == "resume":
-            self._resume_draft(result["draft_state"])
+            if result["action"] == "new":
+                self._create_new_draft(result)
+            elif result["action"] == "resume":
+                self._resume_draft(result["draft_state"])
 
-        self.console.print()
-        self.display.show_success("Draft is ready! Entering draft loop...")
-        self.console.print()
+            self.console.print()
+            self.display.show_success("Draft is ready! Entering draft loop...")
+            self.console.print()
 
-        self._draft_loop()
+            if self._draft_loop():
+                return  # User quit mid-draft — "Goodbye!" already printed
 
-        if self.controller and self.controller.is_complete:
-            summary = self.controller.get_draft_summary()
-            self.display.show_draft_summary(
-                summary, self.draft_state.league_config.scoring_format
-            )
-            self._post_draft_menu()
+            if self.controller and self.controller.is_complete:
+                summary = self.controller.get_draft_summary()
+                self.display.show_draft_summary(
+                    summary, self.draft_state.league_config.scoring_format
+                )
+                self._post_draft_menu()
 
     def _create_new_draft(self, config: Dict) -> None:
         """Create a new draft from wizard configuration."""
@@ -83,28 +87,70 @@ class DraftApp:
         )
 
     def _init_components(self) -> None:
-        """Initialize controller, VOR calculator, and searcher."""
+        """Initialize controller, VOR calculator, computer drafter, and searcher."""
         self.controller = DraftController(self.draft_state)
         self.vor_calculator = DynamicVORCalculator(
             self.draft_state.league_config.scoring_format,
             self.draft_state.league_config.league_size,
         )
+        self.computer_drafter = ComputerDrafter(
+            vor_calculator=self.vor_calculator,
+            strategy="balanced",
+        )
         self.searcher = PlayerSearcher(self.controller)
 
-    def _draft_loop(self) -> None:
-        """Main draft pick loop."""
+    def _draft_loop(self) -> bool:
+        """Main draft pick loop. Returns True if the user quit mid-draft."""
         while not self.controller.is_complete:
             if not self._handle_pick_turn():
-                break  # User quit
+                return True  # User quit
+        return False
 
     def _handle_pick_turn(self) -> bool:
         """Handle a single pick turn. Returns False if user quit."""
-        self._show_draft_board()
+        current_team = self.draft_state.get_current_team()
 
+        if not current_team.is_human:
+            return self._handle_computer_turn()
+
+        # Human turn: show full board and wait for input
+        self._show_draft_board()
         player_id = self._get_user_pick()
         if player_id is None:
             return False
 
+        self._execute_pick(player_id)
+        return True
+
+    def _handle_computer_turn(self) -> bool:
+        """Auto-pick for a computer team using the ADP-blended ComputerDrafter.
+
+        Returns True if a pick was made, False if no legal pick was available.
+        """
+        current_team = self.draft_state.get_current_team()
+        self.console.print(
+            f"\n[dim]  {current_team.team_name} is on the clock...[/dim]"
+        )
+
+        available = self.controller.get_available_players()
+
+        # Filter to players this team can legally draft (position limits respected).
+        # The VOR scores may rank a player highly even when that position slot is full.
+        rules = DraftRules(self.draft_state)
+        legal = [
+            p for p in available
+            if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+        ]
+
+        if not legal:
+            logger.warning(
+                "No legal picks for %s — roster may be full", current_team.team_name
+            )
+            return False
+
+        player_id = self.computer_drafter.make_pick(
+            self.draft_state, legal, current_team.team_id
+        )
         self._execute_pick(player_id)
         return True
 
@@ -151,7 +197,7 @@ class DraftApp:
 
             if parsed["type"] == "command":
                 result = self._handle_command(parsed["command"], parsed["args"])
-                if result == "quit":
+                if result in ("quit", "simulate"):
                     return None
                 if result == "redisplay":
                     self._show_draft_board()
@@ -272,6 +318,37 @@ class DraftApp:
                 self.display.show_error(f"Save failed: {e}")
             return None
 
+        if command in ("sim", "simulate"):
+            return self._simulate_rest_of_draft()
+
+        return None
+
+    def _simulate_rest_of_draft(self) -> Optional[str]:
+        """Auto-pick all remaining turns (human and computer) using ComputerDrafter.
+
+        Returns 'simulate' when the draft is complete so the caller can exit
+        the input loop and hand off to the post-draft summary.  Returns None if
+        the user cancels.
+        """
+        try:
+            raw = self.console.input(
+                "Simulate all remaining picks? [Y/n]: "
+            ).strip().lower()
+        except EOFError:
+            return None
+
+        if raw not in ("", "y", "yes"):
+            return None
+
+        self.console.print("\n[dim]Simulating remaining picks...[/dim]\n")
+        while not self.controller.is_complete:
+            if not self._handle_computer_turn():
+                self.display.show_error("Simulation stopped: a team has no legal picks.")
+                break
+
+        if self.controller.is_complete:
+            self.display.show_success("Simulation complete!")
+            return "simulate"
         return None
 
     def _handle_available(self, args: str, scoring: str) -> None:
@@ -376,7 +453,7 @@ class DraftApp:
         while True:
             try:
                 raw = self.console.input(
-                    "View team roster? [team #/all/quit]: "
+                    "View team roster? [team #/all/quit to menu]: "
                 ).strip().lower()
             except EOFError:
                 break
@@ -412,8 +489,6 @@ class DraftApp:
                     )
             except ValueError:
                 self.display.show_error("Enter a team number, 'all', or 'quit'.")
-
-        self.console.print("Goodbye!")
 
 
 def main():

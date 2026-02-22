@@ -10,6 +10,7 @@ from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.draft_manager.draft_rules import ValidationError
 from src.draft_manager.state_persistence import StatePersistence
+from src.simulation_engine.computer_drafter import ComputerDrafter
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.cli import DraftApp
 from src.ui.display import DraftDisplay
@@ -100,7 +101,10 @@ def _make_app_with_draft(responses):
         player_data=player_data,
     )
     app.controller = DraftController(app.draft_state)
-    app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=4)
+    app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=2)
+    app.computer_drafter = ComputerDrafter(
+        vor_calculator=app.vor_calculator, strategy="balanced"
+    )
     app.searcher = PlayerSearcher(app.controller)
     app.persistence = MagicMock(spec=StatePersistence)
 
@@ -308,10 +312,9 @@ class TestDraftBoard:
         assert "Recommendations" in text
 
     def test_no_recommendations_for_cpu_team(self):
-        """When CPU team is on the clock, no auto-recommendations."""
+        """When CPU team is on the clock it auto-picks; no board/rec display."""
         app, output = _make_app_with_draft([
-            "Josh Allen", "y",   # Human picks first
-            "Jalen Hurts", "y",  # CPU turn - should not auto-show recs
+            "Josh Allen", "y",  # Human picks first (only human input needed)
         ])
 
         # Make first pick (human)
@@ -319,11 +322,13 @@ class TestDraftBoard:
         output.truncate(0)
         output.seek(0)
 
-        # Now it's CPU team's turn
+        # Now it's CPU team's turn — auto-picks, no user input consumed
         app._handle_pick_turn()
         text = output.getvalue()
 
+        # CPU pick banner shows the team name; no full board/Recommendations block
         assert "CPU Team" in text
+        assert "Recommendations" not in text
 
 
 # ── Full draft flow test ─────────────────────────────────────────────
@@ -331,17 +336,21 @@ class TestDraftBoard:
 
 class TestFullDraftFlow:
     def test_complete_2team_draft(self):
-        """Complete a full 2-team, 3-round draft (6 picks total)."""
+        """Complete a full 2-team, 3-round draft (6 picks total).
+
+        Snake order for 2 teams: T0, T1, T1, T0, T0, T1
+        Human (T0) picks at positions 1, 4, 5 — CPU (T1) auto-picks the rest.
+        Human picks by number from the VOR recommendation list shown each turn.
+        """
         app, output = _make_app_with_draft([
-            # Round 1: Team 1 (human), Team 2
-            "Josh Allen", "y",
-            "Jalen Hurts", "y",
-            # Round 2 (snake): Team 2, Team 1
-            "Breece Hall", "y",
-            "Saquon Barkley", "y",
-            # Round 3: Team 1, Team 2
-            "Ja'Marr Chase", "y",
-            "CeeDee Lamb", "y",
+            # Pick 1: Human (T0) — pick first recommended player
+            "1", "y",
+            # Picks 2-3: CPU (T1) auto-picks — no input needed
+            # Pick 4: Human (T0) — pick first available
+            "1", "y",
+            # Pick 5: Human (T0) — pick first available
+            "1", "y",
+            # Pick 6: CPU (T1) auto-picks — no input needed
         ])
 
         app._draft_loop()
@@ -352,12 +361,10 @@ class TestFullDraftFlow:
     def test_draft_summary_after_completion(self):
         """After draft completes, summary is available."""
         app, output = _make_app_with_draft([
-            "Josh Allen", "y",
-            "Jalen Hurts", "y",
-            "Breece Hall", "y",
-            "Saquon Barkley", "y",
-            "Ja'Marr Chase", "y",
-            "CeeDee Lamb", "y",
+            # Human turns at picks 1, 4, 5 (see snake order above)
+            "1", "y",
+            "1", "y",
+            "1", "y",
         ])
 
         app._draft_loop()
@@ -393,3 +400,55 @@ class TestEdgeCases:
         text = output.getvalue()
 
         assert "No player at #99" in text or app.draft_state.current_pick == 2
+
+
+# ── Simulate command tests ───────────────────────────────────────────
+
+
+class TestSimulateCommand:
+    def test_sim_yes_completes_draft(self):
+        """Typing 'sim' and confirming auto-picks all remaining turns.
+
+        Human is on pick 1; sim should run all 6 picks to completion.
+        """
+        app, output = _make_app_with_draft([
+            "sim", "y",   # Human triggers simulation from their first turn
+        ])
+
+        app._draft_loop()
+        text = output.getvalue()
+
+        assert app.controller.is_complete
+        assert len(app.draft_state.all_picks) == 6
+        assert "Simulation complete" in text
+
+    def test_sim_no_cancels_and_draft_continues(self):
+        """Typing 'sim' then 'n' cancels simulation; draft continues normally.
+
+        Snake order: T0 T1 T1 T0 T0 T1 — human (T0) at picks 1, 4, 5.
+        """
+        app, output = _make_app_with_draft([
+            "sim", "n",      # Cancel simulation on pick 1
+            "Josh Allen", "y",  # Human picks normally
+            # Picks 2-3: CPU auto-picks
+            "1", "y",        # Human pick 4
+            "1", "y",        # Human pick 5
+            # Pick 6: CPU auto-picks
+        ])
+
+        app._draft_loop()
+
+        assert app.controller.is_complete
+        assert len(app.draft_state.all_picks) == 6
+
+    def test_sim_appears_in_help(self):
+        """'sim' command is listed in the help panel."""
+        app, output = _make_app_with_draft([
+            "h",
+            "Josh Allen", "y",
+        ])
+
+        app._handle_pick_turn()
+        text = output.getvalue()
+
+        assert "sim" in text
