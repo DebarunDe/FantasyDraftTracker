@@ -1,5 +1,10 @@
 # Monte Carlo parameters
-MC_NUM_SIMULATIONS = 1000
+# 200 simulations per candidate balances statistical quality and the <2s target
+# latency for a full evaluate_candidates() call with CANDIDATE_POOL_SIZE=15
+# candidates at early-round depth (5 rounds × 12 teams = 60 picks per sim).
+# Increasing to 500-1000 improves convergence but risks exceeding 2 seconds on
+# slower machines.
+MC_NUM_SIMULATIONS = 200
 MC_SIMULATION_DEPTH = 5  # Rounds to simulate ahead
 MC_PARALLEL_WORKERS = 4  # CPU cores for parallel simulation
 
@@ -94,6 +99,13 @@ ADP_BLEND_STRATEGIES = {
 
 # Performance tuning
 CANDIDATE_POOL_SIZE = 15  # Top N players to run MC simulations on
+
+# Computer teams in MC simulation sample uniformly from the top K ADP-ranked
+# available players instead of always picking #1.  This creates stochasticity
+# so that each simulation run produces a different outcome — the core
+# requirement for Monte Carlo averaging to be meaningful.
+# K=3: realistic variance without excessive noise.
+MC_COMPUTER_PICK_TOP_K = 3
 
 # Adaptive simulation depths
 SIMULATION_DEPTH_BY_ROUND = {

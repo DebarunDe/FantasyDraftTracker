@@ -393,6 +393,71 @@ class TestGetters:
         assert roster["RB"][0]["name"] == "Player rb1"
 
 
+# ── get_draftable_players ─────────────────────────────────────────────
+
+
+class TestGetDraftablePlayers:
+    """get_draftable_players filters to legally draftable players only."""
+
+    def test_returns_all_when_roster_empty(self):
+        ctrl, state = _make_controller()
+        draftable = ctrl.get_draftable_players(0)
+        # All available players should be draftable when the roster is empty
+        # (bench slots absorb anything)
+        assert len(draftable) == len(state.available_players)
+
+    def test_excludes_position_when_position_and_bench_full(self):
+        """Once QB slot AND all FLEX/bench slots are full, no more QBs recommended."""
+        ctrl, _ = _make_controller(
+            roster_slots={"QB": 1, "RB": 2, "WR": 2, "TE": 1,
+                          "FLEX": 1, "DST": 1, "K": 1, "BENCH": 0},
+        )
+        # Fill the QB slot
+        ctrl.make_pick(0, "qb1")
+        # With BENCH=0, team can still take FLEX-eligible positions in FLEX slot.
+        # But a second QB has nowhere to go → not draftable.
+        draftable_ids = {p["player_id"] for p in ctrl.get_draftable_players(0)}
+        assert "qb2" not in draftable_ids
+        assert "qb3" not in draftable_ids
+
+    def test_includes_position_while_bench_has_space(self):
+        """Extra QBs are still draftable if bench space remains."""
+        ctrl, _ = _make_controller()
+        # Fill the starting QB slot
+        ctrl.make_pick(0, "qb1")
+        # Bench has 6 slots → qb2 should still appear (goes to bench)
+        draftable_ids = {p["player_id"] for p in ctrl.get_draftable_players(0)}
+        assert "qb2" in draftable_ids
+
+    def test_excludes_drafted_players(self):
+        ctrl, _ = _make_controller()
+        ctrl.make_pick(0, "rb1")
+        draftable_ids = {p["player_id"] for p in ctrl.get_draftable_players(0)}
+        assert "rb1" not in draftable_ids
+
+    def test_no_illegal_position_with_bench_zero(self):
+        """Draftable list has no position-illegal entries when bench is zero.
+
+        validate_pick includes a turn-order check, so we verify position
+        legality directly by inspecting team roster vs returned players.
+        """
+        ctrl, _ = _make_controller(
+            roster_slots={"QB": 1, "RB": 2, "WR": 2, "TE": 1,
+                          "FLEX": 1, "DST": 1, "K": 1, "BENCH": 0},
+        )
+        # Directly place a QB on team 0's roster (bypassing turn order)
+        # by manipulating the team roster as get_draftable_players would see it.
+        team = ctrl.draft_state.get_team(0)
+        team.add_player("qb1", "QB")
+        ctrl.draft_state.available_players.remove("qb1")
+        # With QB slot full and BENCH=0, no more QBs are legal for team 0.
+        draftable_ids = {p["player_id"] for p in ctrl.get_draftable_players(0)}
+        assert "qb2" not in draftable_ids
+        assert "qb3" not in draftable_ids
+        # RB slot still has space, RBs should appear.
+        assert "rb1" in draftable_ids
+
+
 # ── Manual Tracker Mode ──────────────────────────────────────────────
 
 
