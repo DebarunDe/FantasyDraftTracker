@@ -11,6 +11,7 @@ from src.draft_manager.draft_rules import DraftRules, ValidationError
 from src.draft_manager.draft_state import DraftState
 from src.draft_manager.state_persistence import StatePersistence
 from src.simulation_engine.computer_drafter import ComputerDrafter
+from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.config import AVAILABLE_PLAYERS_DEFAULT_LIMIT, VOR_RECOMMENDATIONS_COUNT
 from src.ui.display import DraftDisplay
@@ -31,6 +32,7 @@ class DraftApp:
         self.controller: Optional[DraftController] = None
         self.vor_calculator: Optional[DynamicVORCalculator] = None
         self.computer_drafter: Optional[ComputerDrafter] = None
+        self.recommender: Optional[PickRecommender] = None
         self.searcher: Optional[PlayerSearcher] = None
         self.last_displayed_players: List[Dict] = []
 
@@ -98,6 +100,7 @@ class DraftApp:
             vor_calculator=self.vor_calculator,
             strategy="balanced",
         )
+        self.recommender = PickRecommender(vor_calculator=self.vor_calculator)
         self.searcher = PlayerSearcher(self.controller)
 
     @property
@@ -450,18 +453,16 @@ class DraftApp:
         self.last_displayed_players = results
 
     def _show_recommendations(self) -> None:
-        """Show VOR-based recommendations for the current team."""
+        """Show pick recommendations with reasoning for the current team."""
         current_team = self.draft_state.get_current_team()
-        vor_results = self.vor_calculator.calculate_from_draft_state(
-            self.draft_state, current_team.team_id
+        available = self.controller.get_available_players()
+        recommendations = self.recommender.recommend_picks(
+            draft_state=self.draft_state,
+            available_players=available,
+            num_recommendations=VOR_RECOMMENDATIONS_COUNT,
+            team_id=current_team.team_id,
         )
-        scoring = self.draft_state.league_config.scoring_format
-        displayed = self.display.show_vor_recommendations(
-            vor_results,
-            self.draft_state.player_data,
-            scoring,
-            limit=VOR_RECOMMENDATIONS_COUNT,
-        )
+        displayed = self.display.show_recommendations(recommendations)
         self.last_displayed_players = displayed
 
     def _handle_quit(self) -> None:

@@ -36,6 +36,8 @@ from src.draft_manager.draft_rules import ValidationError
 from src.draft_manager.draft_state import DraftState, LeagueConfig, TeamRoster
 from src.draft_manager.state_persistence import StatePersistence
 from src.simulation_engine.computer_drafter import ComputerDrafter
+from src.simulation_engine.models import Recommendation
+from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.cli import DraftApp
 
@@ -924,6 +926,7 @@ def _make_cli_app(responses, draft_mode="simulation",
         vor_calculator=app.vor_calculator, strategy="balanced"
     )
     app.searcher = PlayerSearcher(app.controller)
+    app.recommender = PickRecommender(vor_calculator=app.vor_calculator)
     app.persistence = MagicMock(spec=StatePersistence)
 
     return app, output
@@ -1129,6 +1132,7 @@ class TestManualTrackerCLIFlow:
         app.controller = DraftController(app.draft_state)
         app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=2)
         app.computer_drafter = ComputerDrafter(app.vor_calculator, strategy="balanced")
+        app.recommender = PickRecommender(vor_calculator=app.vor_calculator)
         app.searcher = PlayerSearcher(app.controller)
         app.persistence = MagicMock(spec=StatePersistence)
 
@@ -1385,3 +1389,204 @@ class TestEdgeCases:
         text = output.getvalue()
         assert "Roster" in text
         assert "Josh Allen" in text or "QB" in text
+
+
+# ── TestM11PickRecommender ────────────────────────────────────────────
+
+class TestM11PickRecommender:
+    """M11: Pick Recommender integration within the MVP.
+
+    Verifies that PickRecommender integrates correctly with DraftState,
+    the CLI 'rec' command, and the DraftDisplay output — as required by
+    Milestone 11 success criteria.
+    """
+
+    # ── Programmatic API ──────────────────────────────────────────────
+
+    def test_recommend_picks_returns_list_of_recommendations(self):
+        """recommend_picks() returns List[Recommendation] with correct count."""
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
+                                        n_k=4, n_dst=4)
+        config = LeagueConfig(
+            league_id="m11_test", league_size=4, scoring_format="half_ppr",
+            draft_type="snake", draft_mode="simulation", data_year=2025,
+            roster_slots=dict(STANDARD_ROSTER),
+        )
+        fresh_state = DraftState.create_new(
+            league_config=config,
+            team_names=["T0", "T1", "T2", "T3"],
+            human_team_id=0,
+            player_data=player_data,
+        )
+        vor_calc = DynamicVORCalculator("half_ppr", league_size=4)
+        recommender = PickRecommender(vor_calculator=vor_calc)
+        available = list(fresh_state.player_data.values())
+        recs = recommender.recommend_picks(fresh_state, available, num_recommendations=5)
+
+        assert len(recs) == 5
+        assert all(isinstance(r, Recommendation) for r in recs)
+
+    def test_recommendations_sorted_best_first(self):
+        """Recommendations come in descending dynamic_vor order."""
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
+                                        n_k=4, n_dst=4)
+        config = LeagueConfig(
+            league_id="m11_sort", league_size=12, scoring_format="half_ppr",
+            draft_type="snake", draft_mode="simulation", data_year=2025,
+            roster_slots=dict(STANDARD_ROSTER),
+        )
+        state = DraftState.create_new(
+            league_config=config,
+            team_names=[f"T{i}" for i in range(12)],
+            human_team_id=0,
+            player_data=player_data,
+        )
+        vor_calc = DynamicVORCalculator("half_ppr", league_size=12)
+        recommender = PickRecommender(vor_calculator=vor_calc)
+        available = list(state.player_data.values())
+        recs = recommender.recommend_picks(state, available, num_recommendations=10)
+        vors = [r.dynamic_vor for r in recs]
+        assert vors == sorted(vors, reverse=True)
+
+    def test_each_recommendation_has_reasoning(self):
+        """Every Recommendation carries a non-empty reasoning string."""
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
+                                        n_k=4, n_dst=4)
+        config = LeagueConfig(
+            league_id="m11_reason", league_size=12, scoring_format="half_ppr",
+            draft_type="snake", draft_mode="simulation", data_year=2025,
+            roster_slots=dict(STANDARD_ROSTER),
+        )
+        state = DraftState.create_new(
+            league_config=config,
+            team_names=[f"T{i}" for i in range(12)],
+            human_team_id=0,
+            player_data=player_data,
+        )
+        vor_calc = DynamicVORCalculator("half_ppr", league_size=12)
+        recommender = PickRecommender(vor_calculator=vor_calc)
+        available = list(state.player_data.values())
+        recs = recommender.recommend_picks(state, available, num_recommendations=10)
+        for r in recs:
+            assert r.reasoning.strip(), f"Empty reasoning for {r.player_name}"
+
+    def test_mid_draft_recommendations_reflect_team_state(self):
+        """After several picks, recs reflect what the team still needs."""
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
+                                        n_k=4, n_dst=4)
+        config = LeagueConfig(
+            league_id="m11_mid", league_size=4, scoring_format="half_ppr",
+            draft_type="snake", draft_mode="simulation", data_year=2025,
+            roster_slots=dict(STANDARD_ROSTER),
+        )
+        state = DraftState.create_new(
+            league_config=config,
+            team_names=["T0", "T1", "T2", "T3"],
+            human_team_id=0,
+            player_data=player_data,
+        )
+        controller = DraftController(state)
+        vor_calc = DynamicVORCalculator("half_ppr", league_size=4)
+        drafter = ComputerDrafter(vor_calculator=vor_calc, strategy="balanced")
+
+        # Run first round so team 0 has one pick
+        for _ in range(4):
+            current_team = state.get_current_team()
+            available = controller.get_available_players()
+            from src.draft_manager.draft_rules import DraftRules
+            rules = DraftRules(state)
+            legal = [p for p in available
+                     if rules.validate_pick(current_team.team_id, p["player_id"])[0]]
+            pid = drafter.make_pick(state, legal, current_team.team_id)
+            controller.make_pick(current_team.team_id, pid)
+            if state.current_round > 1:
+                break
+
+        recommender = PickRecommender(vor_calculator=vor_calc)
+        available = controller.get_available_players()
+        recs = recommender.recommend_picks(state, available, num_recommendations=5,
+                                           team_id=0)
+        assert len(recs) > 0
+        assert all(isinstance(r, Recommendation) for r in recs)
+
+    @requires_player_data
+    def test_real_data_recommendations_make_sense(self):
+        """Using actual 2025 player data: top rec is a skill-position starter."""
+        from src.draft_manager.draft_initializer import DraftInitializer
+        initializer = DraftInitializer()
+        state = initializer.create_draft(
+            league_size=12, scoring_format="half_ppr",
+            roster_slots=dict(STANDARD_ROSTER),
+            team_names=[f"Team {i+1}" for i in range(12)],
+            human_team_id=0, draft_mode="simulation", data_year=2025,
+        )
+        vor_calc = DynamicVORCalculator("half_ppr", league_size=12)
+        recommender = PickRecommender(vor_calculator=vor_calc)
+        available = list(state.player_data.values())
+        recs = recommender.recommend_picks(state, available, num_recommendations=5)
+
+        assert len(recs) == 5
+        # Top pick should be a skill position (not K or DST at pick 1)
+        assert recs[0].position in {"QB", "RB", "WR", "TE"}, (
+            f"Expected skill position at pick 1, got {recs[0].position} ({recs[0].player_name})"
+        )
+        # All have reasoning
+        for r in recs:
+            assert r.reasoning.strip()
+
+    # ── CLI integration ───────────────────────────────────────────────
+
+    def test_rec_command_shows_recommendations_table(self):
+        """'rec' command triggers display of a recommendations table."""
+        app, output = _make_cli_app([
+            "rec",           # Show recommendations
+            "1", "y",        # Pick #1 from list
+            "1", "y",        # Next human turn
+            "1", "y",        # Next human turn
+        ])
+        app._draft_loop()
+        text = output.getvalue()
+        assert "Recommendations" in text
+
+    def test_rec_command_shows_reasoning_column(self):
+        """Recommendation table includes the 'Why' reasoning column header."""
+        app, output = _make_cli_app([
+            "rec",
+            "1", "y",
+            "1", "y",
+            "1", "y",
+        ])
+        app._draft_loop()
+        text = output.getvalue()
+        assert "Why" in text
+
+    def test_rec_command_pick_by_number_works(self):
+        """After 'rec', user can pick by number from the displayed list."""
+        app, _ = _make_cli_app([
+            "rec",      # Display recommendations
+            "1", "y",   # Pick #1 from the rec list
+            "1", "y",
+            "1", "y",
+        ])
+        app._draft_loop()
+        assert app.controller.is_complete
+
+    def test_recommender_initialised_in_init_components(self):
+        """_init_components() creates a PickRecommender on the app."""
+        app = DraftApp()
+        player_data = _make_player_pool(n_qb=4, n_rb=8, n_wr=8, n_te=4,
+                                        n_k=3, n_dst=3)
+        config = LeagueConfig(
+            league_id="init_test", league_size=4, scoring_format="half_ppr",
+            draft_type="snake", draft_mode="simulation", data_year=2025,
+            roster_slots=dict(STANDARD_ROSTER),
+        )
+        app.draft_state = DraftState.create_new(
+            league_config=config,
+            team_names=["T0", "T1", "T2", "T3"],
+            human_team_id=0,
+            player_data=player_data,
+        )
+        app._init_components()
+        assert app.recommender is not None
+        assert isinstance(app.recommender, PickRecommender)

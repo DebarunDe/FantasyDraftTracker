@@ -2,6 +2,8 @@
 
 from typing import Dict, List, Optional
 
+from src.simulation_engine.models import Recommendation
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -291,6 +293,41 @@ class DraftDisplay:
                 info.get("team", "?"),
                 f"{proj:.1f}",
                 f"{vor.dynamic_vor:.1f}",
+            )
+
+        self.console.print(table)
+        return displayed
+
+    def show_recommendations(
+        self,
+        recommendations: List[Recommendation],
+    ) -> List[Dict]:
+        """Display ranked recommendations with reasoning.
+
+        Returns the displayed player list (as dicts) for pick-by-number.
+        """
+        table = Table(title="Recommendations", show_lines=False)
+        table.add_column("#", justify="right", width=4)
+        table.add_column("Name", width=22)
+        table.add_column("Pos", width=4)
+        table.add_column("Team", width=5)
+        table.add_column("Proj Pts", justify="right", width=9)
+        table.add_column("Dyn VOR", justify="right", width=8)
+        table.add_column("Why", width=36)
+
+        displayed: List[Dict] = []
+        for rec in recommendations:
+            color = POSITION_COLORS.get(rec.position, "white")
+            displayed.append({"player_id": rec.player_id, "name": rec.player_name,
+                               "position": rec.position, "team": rec.team})
+            table.add_row(
+                str(rec.rank),
+                rec.player_name,
+                f"[{color}]{rec.position}[/{color}]",
+                rec.team,
+                f"{rec.projected_points:.1f}",
+                f"{rec.dynamic_vor:.1f}",
+                f"[dim]{rec.reasoning}[/dim]",
             )
 
         self.console.print(table)

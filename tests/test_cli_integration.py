@@ -104,6 +104,8 @@ def _make_app_with_draft(responses, draft_mode="simulation"):
     app.computer_drafter = ComputerDrafter(
         vor_calculator=app.vor_calculator, strategy="balanced"
     )
+    from src.simulation_engine.pick_recommender import PickRecommender
+    app.recommender = PickRecommender(vor_calculator=app.vor_calculator)
     app.searcher = PlayerSearcher(app.controller)
     app.persistence = MagicMock(spec=StatePersistence)
 
