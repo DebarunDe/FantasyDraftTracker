@@ -11,6 +11,7 @@ from src.draft_manager.draft_rules import DraftRules, ValidationError
 from src.draft_manager.draft_state import DraftState
 from src.draft_manager.state_persistence import StatePersistence
 from src.simulation_engine.computer_drafter import ComputerDrafter
+from src.simulation_engine.monte_carlo import MonteCarloSimulator
 from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.config import AVAILABLE_PLAYERS_DEFAULT_LIMIT, VOR_RECOMMENDATIONS_COUNT
@@ -32,6 +33,7 @@ class DraftApp:
         self.controller: Optional[DraftController] = None
         self.vor_calculator: Optional[DynamicVORCalculator] = None
         self.computer_drafter: Optional[ComputerDrafter] = None
+        self.mc_simulator: Optional[MonteCarloSimulator] = None
         self.recommender: Optional[PickRecommender] = None
         self.searcher: Optional[PlayerSearcher] = None
         self.last_displayed_players: List[Dict] = []
@@ -100,7 +102,15 @@ class DraftApp:
             vor_calculator=self.vor_calculator,
             strategy="balanced",
         )
-        self.recommender = PickRecommender(vor_calculator=self.vor_calculator)
+        self.mc_simulator = MonteCarloSimulator(
+            vor_calculator=self.vor_calculator,
+            scoring_format=self.draft_state.league_config.scoring_format,
+            league_size=self.draft_state.league_config.league_size,
+        )
+        self.recommender = PickRecommender(
+            vor_calculator=self.vor_calculator,
+            mc_simulator=self.mc_simulator,
+        )
         self.searcher = PlayerSearcher(self.controller)
 
     @property

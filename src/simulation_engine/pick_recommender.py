@@ -3,11 +3,17 @@
 Builds on dynamic VOR to produce a ranked list of :class:`Recommendation`
 objects, each with a plain-English explanation of why the player is valuable
 given the current draft context.
+
+When a :class:`~src.simulation_engine.monte_carlo.MonteCarloSimulator` is
+injected, the top ``CANDIDATE_POOL_SIZE`` players (by VOR) are evaluated via
+Monte Carlo simulation and re-ranked by expected team starting-lineup score.
+This captures positional scarcity pressure that pure VOR misses.
 """
 
 import logging
 from typing import Dict, List, Optional
 
+from src.simulation_engine.config import CANDIDATE_POOL_SIZE
 from src.simulation_engine.models import Recommendation, VORResult
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
@@ -23,9 +29,11 @@ _ADP_SLIP_THRESHOLD = 12
 class PickRecommender:
     """Generate ranked pick recommendations for the human drafter.
 
-    Uses :class:`DynamicVORCalculator` as the primary signal.  A Monte Carlo
-    simulator (M13) can be injected later; when ``mc_simulator`` is ``None``
-    the class falls back to pure VOR ranking.
+    Uses :class:`DynamicVORCalculator` as the primary signal.  When a
+    :class:`~src.simulation_engine.monte_carlo.MonteCarloSimulator` is
+    provided, the top ``CANDIDATE_POOL_SIZE`` VOR candidates are re-ranked by
+    expected team projected points from Monte Carlo simulation.  Falls back to
+    pure VOR when ``mc_simulator`` is ``None``.
 
     All methods are stateless — draft state is passed in on every call.
     """
@@ -36,7 +44,7 @@ class PickRecommender:
         mc_simulator=None,
     ) -> None:
         self.vor_calculator = vor_calculator
-        self.mc_simulator = mc_simulator  # Reserved for M13 Monte Carlo
+        self.mc_simulator = mc_simulator  # Optional MonteCarloSimulator (M13)
 
     # ------------------------------------------------------------------
     # Public API
@@ -50,6 +58,11 @@ class PickRecommender:
         team_id: Optional[int] = None,
     ) -> List[Recommendation]:
         """Return the top ``num_recommendations`` picks for *team_id*.
+
+        When a Monte Carlo simulator is configured, the top
+        ``CANDIDATE_POOL_SIZE`` players by VOR are re-ranked by expected
+        starting-lineup projected points.  Falls back to pure VOR ordering
+        when ``mc_simulator`` is ``None``.
 
         Args:
             draft_state: Current :class:`~src.draft_manager.draft_state.DraftState`.
@@ -69,18 +82,58 @@ class PickRecommender:
         )
 
         available_ids = {p["player_id"] for p in available_players}
-        all_sorted = sorted(
+        all_sorted_vor = sorted(
             [v for v in vor_results.values() if v.player_id in available_ids],
             key=lambda v: v.dynamic_vor,
             reverse=True,
         )
-        top_n = all_sorted[:num_recommendations]
 
-        # Rank within each position by dynamic VOR so clause 1 always matches
-        # the recommendation order (not base-VOR order which can differ).
+        # ── Monte Carlo re-ranking ──────────────────────────────────────
+        # Evaluate the top CANDIDATE_POOL_SIZE players via MC simulation
+        # and re-sort by expected team score.  The full VOR-sorted list is
+        # kept for position-rank calculation (used in reasoning generation).
+        mc_scores: Dict[str, float] = {}
+        if self.mc_simulator is not None and available_players:
+            candidate_pool = available_players[:]  # copy to avoid mutation
+            # Limit to top candidates by VOR so we only simulate the picks
+            # that could plausibly be recommended.
+            candidate_ids = {v.player_id for v in all_sorted_vor[:CANDIDATE_POOL_SIZE]}
+            candidates_for_mc = [
+                p for p in candidate_pool if p["player_id"] in candidate_ids
+            ]
+            if candidates_for_mc:
+                mc_scores = self.mc_simulator.evaluate_candidates(
+                    draft_state, candidates_for_mc
+                )
+                logger.debug(
+                    "MC evaluated %d candidates (top MC: %.1f pts)",
+                    len(mc_scores),
+                    max(mc_scores.values()) if mc_scores else 0.0,
+                )
+
+        # Determine final top-N ordering.
+        if mc_scores:
+            # Players with MC scores: rank by MC expected score desc.
+            # Players not in MC pool (beyond CANDIDATE_POOL_SIZE) remain at
+            # the bottom, sorted by VOR.
+            mc_ranked = sorted(
+                all_sorted_vor[:CANDIDATE_POOL_SIZE],
+                key=lambda v: mc_scores.get(v.player_id, 0.0),
+                reverse=True,
+            )
+            top_n = (mc_ranked + all_sorted_vor[CANDIDATE_POOL_SIZE:])[:num_recommendations]
+            # MC delta: advantage of best pick over the second-best MC pick.
+            mc_sorted_scores = sorted(mc_scores.values(), reverse=True)
+            best_mc = mc_sorted_scores[0] if mc_sorted_scores else 0.0
+            second_mc = mc_sorted_scores[1] if len(mc_sorted_scores) > 1 else best_mc
+        else:
+            top_n = all_sorted_vor[:num_recommendations]
+            best_mc = second_mc = 0.0
+
+        # Rank within each position by dynamic VOR (for reasoning clause 1).
         pos_counter: Dict[str, int] = {}
         dvor_pos_rank: Dict[str, int] = {}
-        for v in all_sorted:  # already sorted dVOR desc
+        for v in all_sorted_vor:
             pos = v.position
             pos_counter[pos] = pos_counter.get(pos, 0) + 1
             dvor_pos_rank[v.player_id] = pos_counter[pos]
@@ -96,6 +149,8 @@ class PickRecommender:
             player = draft_state.player_data.get(vor_result.player_id, {})
             proj = player.get("projections", {}).get(scoring, 0.0)
             pos_rank = dvor_pos_rank.get(vor_result.player_id, vor_result.position_rank)
+            mc_score = mc_scores.get(vor_result.player_id, 0.0)
+
             reasoning = self._generate_reasoning(
                 vor_result,
                 player,
@@ -106,6 +161,8 @@ class PickRecommender:
                 draft_state.player_data,
                 picks_made=picks_made,
                 dvor_position_rank=pos_rank,
+                mc_score=mc_score,
+                mc_delta=best_mc - second_mc if rank == 1 and mc_scores else 0.0,
             )
             recommendations.append(
                 Recommendation(
@@ -122,6 +179,8 @@ class PickRecommender:
                     is_tier_boundary=vor_result.is_tier_boundary,
                     scarcity_multiplier=vor_result.scarcity_multiplier,
                     need_multiplier=vor_result.need_multiplier,
+                    mc_expected_score=mc_score,
+                    mc_delta=best_mc - second_mc if rank == 1 and mc_scores else 0.0,
                 )
             )
 
@@ -142,11 +201,15 @@ class PickRecommender:
         player_data: Dict,
         picks_made: int = 0,
         dvor_position_rank: int = 0,
+        mc_score: float = 0.0,
+        mc_delta: float = 0.0,
     ) -> str:
         """Build a short, plain-English explanation for the recommendation.
 
         Returns at most two clauses joined by " · " so the output stays
-        readable in a terminal table.
+        readable in a terminal table.  When MC data is available and shows a
+        meaningful advantage, replaces the contextual second clause with the
+        MC advantage signal.
         """
         pos = vor_result.position
         clauses: List[str] = []
@@ -166,6 +229,12 @@ class PickRecommender:
             clauses.append(f"#{pos_rank} available {pos}")
 
         # ── 2. Contextual second clause ──────────────────────────────────
+        # When MC confirms a meaningful advantage (≥1 pt), show that instead
+        # of the standard contextual clause — it's the most informative signal.
+        if mc_score > 0.0 and mc_delta >= 1.0:
+            clauses.append(f"MC: +{mc_delta:.1f} pts vs next pick")
+            return " · ".join(clauses[:2])
+
         # Priority: team need > ADP value slip > tier boundary > scarcity
         #           > late upside > bench depth
         overall_rank = player.get("overall_rank", 999)

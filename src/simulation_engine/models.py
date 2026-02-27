@@ -36,3 +36,6 @@ class Recommendation:
     is_tier_boundary: bool = False
     scarcity_multiplier: float = 1.0
     need_multiplier: float = 1.0
+    # Monte Carlo fields (populated when MC simulator is active)
+    mc_expected_score: float = 0.0   # Expected starting-lineup pts from simulations
+    mc_delta: float = 0.0            # Expected pts advantage over the next-best MC pick
