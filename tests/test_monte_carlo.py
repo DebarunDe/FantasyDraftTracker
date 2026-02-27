@@ -17,6 +17,7 @@ Coverage:
 import time
 from typing import Dict
 
+import numpy as np
 import pytest
 
 from src.draft_manager.draft_state import DraftState, LeagueConfig, TeamRoster
@@ -340,10 +341,9 @@ class TestEvaluateCandidates:
 class TestHardCaps:
     """Verify simulation respects POSITION_HARD_CAPS."""
 
-    def test_team_cannot_exceed_rb_hard_cap(self):
-        """Human team should never accumulate more RBs than the hard cap."""
+    def test_rb_simulation_returns_valid_scores(self):
+        """Simulate with RB candidate and verify scores are valid (sanity check)."""
         player_data = _make_player_pool(n_rb=30)
-        rb_cap = POSITION_HARD_CAPS.get("RB", 7)
         state = _make_draft_state(player_data=player_data)
         sim = _make_simulator()
 
@@ -353,9 +353,8 @@ class TestHardCaps:
         vor_sorted = MonteCarloSimulator._build_vor_sorted(available_ids, vor_results)
         adp_sorted = MonteCarloSimulator._build_adp_sorted(available_ids, player_data)
         base_counts = MonteCarloSimulator._extract_team_pos_counts(state)
+        rng = np.random.default_rng(42)
 
-        # Run 10 simulations and track max RB count seen for human team
-        max_rb = 0
         for _ in range(10):
             score = sim._simulate_single(
                 candidate_id="rb1",
@@ -371,10 +370,10 @@ class TestHardCaps:
                 player_data=player_data,
                 existing_my_picks=[],
                 depth=5,
+                rng=rng,
             )
-            assert score >= 0.0  # basic sanity
-        # We can't directly count RBs per sim without refactoring, so just verify
-        # scores are computed (the cap logic is tested via test_team_does_not_hoard_k_dst).
+            assert score >= 0.0
+            assert score == score  # not NaN
 
     def test_team_does_not_hoard_k_dst(self):
         """K/DST hard cap=2 means at most 2 Ks or DSTs per team in simulation."""
@@ -408,6 +407,7 @@ class TestHardCaps:
             player_data=player_data,
             existing_my_picks=[],
             depth=5,
+            rng=np.random.default_rng(0),
         )
         assert score >= 0.0
         assert score == score  # not NaN
@@ -572,3 +572,92 @@ class TestSimulationIsolation:
         sim.evaluate_candidates(state, candidates, num_simulations=5)
         for team in state.teams:
             assert team.picks == original_picks[team.team_id]
+
+
+# ── Stochasticity ─────────────────────────────────────────────────────
+
+class TestStochasticity:
+    """Verify that simulations are genuinely stochastic."""
+
+    def _build_sim_state(self, state, player_data):
+        vor_calc = DynamicVORCalculator("half_ppr", 12)
+        vor_results = vor_calc.calculate_from_draft_state(state, 0)
+        available_ids = set(state.available_players)
+        return (
+            MonteCarloSimulator._build_vor_sorted(available_ids, vor_results),
+            MonteCarloSimulator._build_adp_sorted(available_ids, player_data),
+            MonteCarloSimulator._extract_team_pos_counts(state),
+            available_ids,
+        )
+
+    def test_repeated_simulations_produce_different_scores(self):
+        """Multiple _simulate_single calls with a shared RNG should not all return
+        the same value — stochastic computer picks must create variance."""
+        player_data = _make_player_pool()
+        state = _make_draft_state(player_data=player_data)
+        sim = _make_simulator()
+        vor_sorted, adp_sorted, base_counts, available_ids = self._build_sim_state(
+            state, player_data
+        )
+        rng = np.random.default_rng(42)
+
+        scores = [
+            sim._simulate_single(
+                candidate_id="rb1",
+                my_team_id=0,
+                current_pick=1,
+                draft_order=state.draft_order,
+                league_size=12,
+                roster_slots=STANDARD_ROSTER,
+                original_available=available_ids,
+                vor_sorted=vor_sorted,
+                adp_sorted=adp_sorted,
+                base_team_pos_counts=base_counts,
+                player_data=player_data,
+                existing_my_picks=[],
+                depth=3,
+                rng=rng,
+            )
+            for _ in range(20)
+        ]
+
+        unique_scores = set(scores)
+        assert len(unique_scores) > 1, (
+            f"All 20 simulations returned the same score ({scores[0]:.1f}). "
+            "Computer picks must be stochastic for Monte Carlo averaging to be meaningful."
+        )
+
+    def test_evaluate_candidates_variance_across_runs(self):
+        """Two independent evaluate_candidates calls for the same candidate should
+        produce different means (since each call creates a fresh RNG)."""
+        player_data = _make_player_pool()
+        state = _make_draft_state(player_data=player_data)
+        sim = _make_simulator()
+        candidates = [player_data["rb1"]]
+
+        mean1 = sim.evaluate_candidates(state, candidates, num_simulations=50)["rb1"]
+        mean2 = sim.evaluate_candidates(state, candidates, num_simulations=50)["rb1"]
+
+        # Two independent runs should converge to similar but not identical values.
+        # They won't be exactly equal unless the RNG happened to produce the same
+        # sequence, which is astronomically unlikely.
+        assert mean1 != mean2, (
+            "Two independent MC runs returned identical means — "
+            "simulations appear to be deterministic."
+        )
+
+    def test_zero_simulations_raises_value_error(self):
+        """num_simulations=0 should raise ValueError before dividing by zero."""
+        state = _make_draft_state()
+        sim = _make_simulator()
+        candidates = [state.player_data[pid] for pid in state.available_players[:1]]
+        with pytest.raises(ValueError, match="positive integer"):
+            sim.evaluate_candidates(state, candidates, num_simulations=0)
+
+    def test_negative_simulations_raises_value_error(self):
+        """num_simulations=-1 should also raise ValueError."""
+        state = _make_draft_state()
+        sim = _make_simulator()
+        candidates = [state.player_data[pid] for pid in state.available_players[:1]]
+        with pytest.raises(ValueError, match="positive integer"):
+            sim.evaluate_candidates(state, candidates, num_simulations=-1)

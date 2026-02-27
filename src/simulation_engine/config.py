@@ -100,6 +100,13 @@ ADP_BLEND_STRATEGIES = {
 # Performance tuning
 CANDIDATE_POOL_SIZE = 15  # Top N players to run MC simulations on
 
+# Computer teams in MC simulation sample uniformly from the top K ADP-ranked
+# available players instead of always picking #1.  This creates stochasticity
+# so that each simulation run produces a different outcome — the core
+# requirement for Monte Carlo averaging to be meaningful.
+# K=3: realistic variance without excessive noise.
+MC_COMPUTER_PICK_TOP_K = 3
+
 # Adaptive simulation depths
 SIMULATION_DEPTH_BY_ROUND = {
     "early": 5,   # Rounds 1-3

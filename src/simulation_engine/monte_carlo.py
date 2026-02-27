@@ -36,8 +36,11 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
+import numpy as np
+
 from src.simulation_engine.config import (
     CANDIDATE_POOL_SIZE,
+    MC_COMPUTER_PICK_TOP_K,
     MC_NUM_SIMULATIONS,
     POSITION_HARD_CAPS,
     SIMULATION_DEPTH_BY_ROUND,
@@ -89,20 +92,38 @@ class MonteCarloSimulator:
     ) -> Dict[str, float]:
         """Estimate expected team starting-lineup score for each candidate pick.
 
+        Each simulation is stochastic: computer teams sample uniformly from the
+        top ``MC_COMPUTER_PICK_TOP_K`` ADP-ranked available players rather than
+        always taking the #1 pick.  Averaging over ``num_simulations`` runs
+        therefore converges on a true *expected* team value, not just the value
+        under a single deterministic scenario.
+
         Args:
             draft_state: Current DraftState.
             candidates: Player dicts to evaluate (typically top N by VOR).
-            num_simulations: Simulations per candidate.  Defaults to
-                ``MC_NUM_SIMULATIONS`` from config.
+            num_simulations: Simulations per candidate.  Must be a positive
+                integer.  Defaults to ``MC_NUM_SIMULATIONS`` from config.
 
         Returns:
             Dict mapping ``player_id`` → mean expected starting-lineup
             projected points over all simulations.
+
+        Raises:
+            ValueError: If ``num_simulations`` is provided but ≤ 0.
         """
+        if num_simulations is not None and num_simulations <= 0:
+            raise ValueError(
+                f"num_simulations must be a positive integer, got {num_simulations}"
+            )
         n = num_simulations if num_simulations is not None else MC_NUM_SIMULATIONS
         depth = self._get_simulation_depth(draft_state.current_round)
         my_team_id = draft_state.current_team_id
         player_data = draft_state.player_data
+
+        # draft_state is the single authoritative source for league_size.
+        # self.league_size is stored for external inspection but is not used
+        # inside the simulation loop to avoid inconsistency.
+        league_size = draft_state.league_config.league_size
 
         # Pre-compute VOR results once; shared as the human's greedy oracle.
         vor_results = self.vor_calculator.calculate_from_draft_state(
@@ -126,6 +147,10 @@ class MonteCarloSimulator:
             if player_data.get(pid, {}).get("position", "")
         ]
 
+        # Single RNG instance shared across all simulations in this call.
+        # numpy's default_rng() uses OS entropy; no manual seed needed.
+        rng = np.random.default_rng()
+
         expected_values: Dict[str, float] = {}
         for candidate in candidates:
             cid = candidate["player_id"]
@@ -139,7 +164,7 @@ class MonteCarloSimulator:
                     my_team_id=my_team_id,
                     current_pick=draft_state.current_pick,
                     draft_order=draft_state.draft_order,
-                    league_size=draft_state.league_config.league_size,
+                    league_size=league_size,
                     roster_slots=draft_state.league_config.roster_slots,
                     original_available=available_ids,
                     vor_sorted=vor_sorted,
@@ -148,6 +173,7 @@ class MonteCarloSimulator:
                     player_data=player_data,
                     existing_my_picks=existing_my_picks,
                     depth=depth,
+                    rng=rng,
                 )
             expected_values[cid] = total / n
             logger.debug(
@@ -178,12 +204,15 @@ class MonteCarloSimulator:
         player_data: Dict[str, Dict],
         existing_my_picks: List[Tuple[str, str]],
         depth: int,
+        rng: "np.random.Generator",
     ) -> float:
         """Run one Monte Carlo simulation.
 
-        Returns the human team's expected starting-lineup projected points.
-        The candidate player is always picked first; subsequent picks are
-        made greedily (VOR for human, ADP for computer teams).
+        Returns the human team's starting-lineup projected points.
+        The candidate player is always taken first.  Subsequent picks:
+        - Human team: deterministic greedy VOR (optimal future play).
+        - Computer teams: stochastic top-K ADP sampling via ``rng``
+          (models realistic draft-room variance across simulations).
         """
         # Shallow copy of mutable state — no DraftState copies needed.
         available: set = original_available - {candidate_id}
@@ -216,7 +245,7 @@ class MonteCarloSimulator:
             if team_id == my_team_id:
                 chosen = _pick_by_vor(available, vor_sorted, pos_counts)
             else:
-                chosen = _pick_by_adp(available, adp_sorted, pos_counts)
+                chosen = _pick_by_adp(available, adp_sorted, pos_counts, rng)
 
             if chosen is None:
                 break
@@ -339,14 +368,34 @@ def _pick_by_adp(
     available: set,
     adp_sorted: List[Tuple[str, str]],
     pos_counts: Dict[str, int],
+    rng: "np.random.Generator",
+    top_k: int = MC_COMPUTER_PICK_TOP_K,
 ) -> Optional[str]:
-    """Return the highest-ADP (lowest overall_rank) available player that respects hard caps."""
+    """Sample uniformly from the top-K ADP-ranked available players.
+
+    Computer teams don't always select the consensus #1 pick — they choose
+    randomly from the top ``top_k`` eligible players by ADP.  This is what
+    makes each Monte Carlo simulation different, so that averaging over N
+    runs produces a true *expected* value rather than a single deterministic
+    outcome repeated N times.
+
+    Hard caps are still enforced: a player whose position has hit the cap
+    is skipped when building the candidate pool.
+    """
+    candidates: List[str] = []
     for pid, pos in adp_sorted:
         if pid in available:
             cap = POSITION_HARD_CAPS.get(pos, 999)
             if pos_counts.get(pos, 0) < cap:
-                return pid
-    return None
+                candidates.append(pid)
+                if len(candidates) >= top_k:
+                    break
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    # Uniform random index in [0, len(candidates))
+    return candidates[int(rng.integers(0, len(candidates)))]
 
 
 def _score_team(
