@@ -465,7 +465,7 @@ class DraftApp:
     def _show_recommendations(self) -> None:
         """Show pick recommendations with reasoning for the current team."""
         current_team = self.draft_state.get_current_team()
-        available = self.controller.get_available_players()
+        available = self.controller.get_draftable_players(current_team.team_id)
         recommendations = self.recommender.recommend_picks(
             draft_state=self.draft_state,
             available_players=available,

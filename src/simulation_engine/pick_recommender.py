@@ -111,6 +111,9 @@ class PickRecommender:
                     max(mc_scores.values()) if mc_scores else 0.0,
                 )
 
+        team = draft_state.get_team(team_id)
+        roster_slots = draft_state.league_config.roster_slots
+
         # Determine final top-N ordering.
         if mc_scores:
             # Players with MC scores: rank by MC expected score desc.
@@ -121,14 +124,26 @@ class PickRecommender:
                 key=lambda v: mc_scores.get(v.player_id, 0.0),
                 reverse=True,
             )
-            top_n = (mc_ranked + all_sorted_vor[CANDIDATE_POOL_SIZE:])[:num_recommendations]
+            ordered = mc_ranked + all_sorted_vor[CANDIDATE_POOL_SIZE:]
             # MC delta: advantage of best pick over the second-best MC pick.
             mc_sorted_scores = sorted(mc_scores.values(), reverse=True)
             best_mc = mc_sorted_scores[0] if mc_sorted_scores else 0.0
             second_mc = mc_sorted_scores[1] if len(mc_sorted_scores) > 1 else best_mc
         else:
-            top_n = all_sorted_vor[:num_recommendations]
+            ordered = all_sorted_vor
             best_mc = second_mc = 0.0
+
+        # Apply per-position cap so the list stays balanced across positions.
+        # Without this, a team with 0 QBs would see 5+ QBs in the top 10
+        # because all QBs share the same need boost — even though only 1 will
+        # ever be drafted this round.
+        top_n = self._apply_position_cap(
+            ordered,
+            team,
+            roster_slots,
+            draft_state.player_data,
+            num_recommendations,
+        )
 
         # Rank within each position by dynamic VOR (for reasoning clause 1).
         pos_counter: Dict[str, int] = {}
@@ -137,9 +152,6 @@ class PickRecommender:
             pos = v.position
             pos_counter[pos] = pos_counter.get(pos, 0) + 1
             dvor_pos_rank[v.player_id] = pos_counter[pos]
-
-        team = draft_state.get_team(team_id)
-        roster_slots = draft_state.league_config.roster_slots
         drafted_positions = self._get_drafted_positions(draft_state)
         picks_made = len(draft_state.all_picks)
         scoring = self.vor_calculator.scoring_format
@@ -235,12 +247,20 @@ class PickRecommender:
             clauses.append(f"MC: +{mc_delta:.1f} pts vs next pick")
             return " · ".join(clauses[:2])
 
-        # Priority: team need > ADP value slip > tier boundary > scarcity
+        # Priority: tier boundary > team need > ADP value slip > scarcity
         #           > late upside > bench depth
+        #
+        # Tier boundary is placed first because it is the unique, actionable
+        # insight that changes the draft decision ("take now or miss this tier").
+        # Team need ("Fills empty slot") is already visible on the roster panel,
+        # so it is lower priority than the hidden-information signals.
         overall_rank = player.get("overall_rank", 999)
         adp_slip = picks_made - overall_rank  # positive → player slipped past ADP
 
-        if team_count == 0:
+        if vor_result.is_tier_boundary:
+            clauses.append("Tier drop-off ahead")
+
+        elif team_count == 0:
             clauses.append(f"Fills empty {pos} slot")
 
         elif 0 < team_count < starting_slots:
@@ -249,9 +269,6 @@ class PickRecommender:
         elif adp_slip >= _ADP_SLIP_THRESHOLD and vor_result.base_vor > 0:
             # Still above replacement value but went later than consensus
             clauses.append(f"Value: fell {adp_slip} picks past ADP")
-
-        elif vor_result.is_tier_boundary:
-            clauses.append("Tier drop-off ahead")
 
         elif vor_result.scarcity_multiplier >= 1.2:
             league_drafted = drafted_positions.get(pos, 0)
@@ -270,6 +287,46 @@ class PickRecommender:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _apply_position_cap(
+        self,
+        ordered: List,
+        team,
+        roster_slots: Dict[str, int],
+        player_data: Dict,
+        num_recommendations: int,
+    ) -> List:
+        """Cap same-position entries in the recommendation list.
+
+        For each position, the cap is ``max(1, remaining_starting_slots + 1)``:
+        - 1 best option is always shown (so you can compare across positions).
+        - +1 allows one backup/handcuff beyond the starter need.
+        - No more than that, so a team missing a QB doesn't see 5 QBs when
+          it can only start 1 QB.
+
+        Examples with 0 at position:
+          QB (1 starting slot): cap=2  — show top QB + 1 backup
+          RB (3 starting slots incl. FLEX): cap=4
+          WR (3 starting slots incl. FLEX): cap=4
+          TE (2 starting slots incl. FLEX): cap=3
+
+        With starters full (remaining=0): cap=1 — show only best available.
+        """
+        pos_shown: Dict[str, int] = {}
+        result = []
+        for vor in ordered:
+            if len(result) >= num_recommendations:
+                break
+            pos = vor.position
+            shown = pos_shown.get(pos, 0)
+            team_count = self._count_team_at_position(team, pos, player_data)
+            starting_slots = self._get_starting_slots(pos, roster_slots)
+            remaining = max(0, starting_slots - team_count)
+            cap = max(1, remaining + 1)
+            if shown < cap:
+                result.append(vor)
+                pos_shown[pos] = shown + 1
+        return result
 
     def _get_drafted_positions(self, draft_state) -> Dict[str, int]:
         """Count how many players have been drafted at each position league-wide."""
