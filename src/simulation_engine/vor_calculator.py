@@ -85,9 +85,20 @@ class DynamicVORCalculator:
         Returns:
             Dict mapping ``player_id`` to :class:`VORResult`.
         """
-        # Pre-compute position ranks and tiers among available players
-        position_ranks = self._compute_position_ranks(available_players)
-        position_tiers = self._detect_tiers(available_players)
+        # Single-pass: compute position ranks AND tier info together (one sort per
+        # position instead of two separate sort passes).
+        position_ranks, position_tiers = self._compute_ranks_and_tiers(available_players)
+
+        # Pre-compute slot counts per position once — team_roster doesn't change
+        # during this loop, so calling _count_position_slots for every player
+        # (O(p × bench_size)) is wasteful.  Cache it to O(num_positions).
+        pos_slot_cache: Dict[str, tuple] = {}
+        for player in available_players:
+            pos = player["position"]
+            if pos not in pos_slot_cache:
+                pos_slot_cache[pos] = self._count_position_slots(
+                    pos, team_roster, roster_slots, player_positions
+                )
 
         results: Dict[str, VORResult] = {}
         for player in available_players:
@@ -101,12 +112,8 @@ class DynamicVORCalculator:
                 drafted_positions.get(position, 0),
             )
 
-            need = self._calculate_need_multiplier(
-                position,
-                team_roster,
-                roster_slots,
-                player_positions,
-            )
+            filled, total = pos_slot_cache[position]
+            need = self._need_from_slot_counts(filled, total, position)
 
             # Get tier information
             tier_info = position_tiers.get(position, {}).get(player_id, {})
@@ -150,9 +157,6 @@ class DynamicVORCalculator:
                 dynamic_vor = base_vor * scarcity * need * uncertainty_adj * tier_urgency
 
                 # Hard cap: apply position-specific max total players
-                filled = self._count_position_slots(
-                    position, team_roster, roster_slots, player_positions
-                )[0]
                 hard_cap = POSITION_HARD_CAPS.get(position)
                 if hard_cap is not None and filled >= hard_cap:
                     dynamic_vor = -100.0
@@ -295,7 +299,14 @@ class DynamicVORCalculator:
         filled, total = self._count_position_slots(
             position, team_roster, roster_slots, player_positions
         )
+        return self._need_from_slot_counts(filled, total, position)
 
+    def _need_from_slot_counts(self, filled: int, total: int, position: str) -> float:
+        """Compute need multiplier from pre-counted slot values.
+
+        Separated from ``_calculate_need_multiplier`` so ``calculate_dynamic_vor``
+        can reuse cached ``(filled, total)`` pairs without re-iterating the roster.
+        """
         if total == 0:
             # No slots for this position at all — heavy penalty
             # K/DST get no floor (can go to 0), others floor at 0.05
@@ -386,6 +397,86 @@ class DynamicVORCalculator:
                 filled += len(team_roster.get("FLEX", []))
 
         return filled, total
+
+    def _compute_ranks_and_tiers(
+        self,
+        available_players: List[Dict],
+    ) -> tuple:
+        """Compute position ranks and tier metadata in a single sort pass per position.
+
+        Replaces calling ``_compute_position_ranks`` + ``_detect_tiers`` separately,
+        which each performed an independent O(p log p) sort per position.  This method
+        does one sort per position and produces both outputs in a single sweep.
+
+        Returns:
+            ``(position_ranks, position_tiers)`` where:
+            - ``position_ranks``: Dict[player_id, int] — 1-based rank within position.
+            - ``position_tiers``: Dict[pos, Dict[player_id, dict]] — tier metadata.
+        """
+        by_position: Dict[str, List[Dict]] = {}
+        for player in available_players:
+            pos = player["position"]
+            by_position.setdefault(pos, []).append(player)
+
+        position_ranks: Dict[str, int] = {}
+        position_tiers: Dict[str, Dict[str, Dict]] = {}
+
+        for pos, players in by_position.items():
+            sorted_players = sorted(
+                players,
+                key=lambda p: p.get("baseline_vor", {}).get(self.scoring_format, 0.0),
+                reverse=True,
+            )
+
+            pos_tiers: Dict[str, Dict] = {}
+            current_tier = 1
+
+            for rank, player in enumerate(sorted_players, start=1):
+                player_id = player["player_id"]
+                position_ranks[player_id] = rank
+
+                current_vor = player.get("baseline_vor", {}).get(self.scoring_format, 0.0)
+                is_boundary = False
+                tier_gap = 0.0
+                idx = rank - 1  # 0-based index
+                if idx < len(sorted_players) - 1:
+                    next_vor = sorted_players[idx + 1].get(
+                        "baseline_vor", {}
+                    ).get(self.scoring_format, 0.0)
+                    if current_vor > 0:
+                        drop = (current_vor - next_vor) / current_vor
+                        if drop > TIER_GAP_THRESHOLD:
+                            is_boundary = True
+                            tier_gap = drop
+
+                pos_tiers[player_id] = {
+                    "tier": current_tier,
+                    "is_boundary": is_boundary,
+                    "tier_gap": tier_gap,
+                    "tier_size": 0,  # filled in below
+                }
+
+                if is_boundary:
+                    current_tier += 1
+
+            # Second pass: propagate tier sizes and tier_gap to all tier members.
+            tier_members: Dict[int, List[str]] = defaultdict(list)
+            tier_gap_by_num: Dict[int, float] = {}
+            for pid, info in pos_tiers.items():
+                tier_members[info["tier"]].append(pid)
+                if info["is_boundary"]:
+                    tier_gap_by_num[info["tier"]] = info["tier_gap"]
+
+            for tier_num, member_ids in tier_members.items():
+                size = len(member_ids)
+                gap = tier_gap_by_num.get(tier_num, 0.0)
+                for pid in member_ids:
+                    pos_tiers[pid]["tier_size"] = size
+                    pos_tiers[pid]["tier_gap"] = gap
+
+            position_tiers[pos] = pos_tiers
+
+        return position_ranks, position_tiers
 
     def _compute_position_ranks(
         self,

@@ -159,11 +159,19 @@ class TestGetTeamForPick:
 
 # ── _score_team ───────────────────────────────────────────────────────
 
+def _proj(player_data: dict, scoring_format: str) -> dict:
+    """Build projections_lookup from player_data for the given scoring format."""
+    return {
+        pid: data.get("projections", {}).get(scoring_format, 0.0)
+        for pid, data in player_data.items()
+    }
+
+
 class TestScoreTeam:
     """Verify starting-lineup scoring logic."""
 
     def test_empty_picks_returns_zero(self):
-        assert _score_team([], {}, "half_ppr", STANDARD_ROSTER) == 0.0
+        assert _score_team([], {}, STANDARD_ROSTER) == 0.0
 
     def test_single_qb_scores_correctly(self):
         player_data = {
@@ -173,7 +181,7 @@ class TestScoreTeam:
             }
         }
         picks = [("qb1", "QB")]
-        score = _score_team(picks, player_data, "half_ppr", STANDARD_ROSTER)
+        score = _score_team(picks, _proj(player_data, "half_ppr"), STANDARD_ROSTER)
         assert score == pytest.approx(350.0)
 
     def test_bench_does_not_count(self):
@@ -182,7 +190,7 @@ class TestScoreTeam:
         player_data = {f"rb{i}": {"projections": {"half_ppr": 200.0 - i * 10}, "position": "RB"}
                        for i in range(1, 4)}
         picks = [(f"rb{i}", "RB") for i in range(1, 4)]
-        score = _score_team(picks, player_data, "half_ppr", STANDARD_ROSTER)
+        score = _score_team(picks, _proj(player_data, "half_ppr"), STANDARD_ROSTER)
         # 2 RB slots + 1 FLEX = 3 starters; rb1(190) + rb2(180) + rb3(170-FLEX) = 540
         assert score == pytest.approx(190.0 + 180.0 + 170.0)
 
@@ -200,7 +208,7 @@ class TestScoreTeam:
             ("wr1", "WR"), ("wr2", "WR"),
             ("te1", "TE"),
         ]
-        score = _score_team(picks, player_data, "half_ppr", STANDARD_ROSTER)
+        score = _score_team(picks, _proj(player_data, "half_ppr"), STANDARD_ROSTER)
         # QB:0 + RB:250+200 + WR:180+160 + TE:120 + FLEX: best remaining = rb3? No — all used.
         # RB slots used: rb1, rb2 (2 slots). WR slots used: wr1, wr2 (2 slots). TE slot: te1.
         # Remaining for FLEX: none of rb3/wr3/te2 are in picks.
@@ -215,7 +223,7 @@ class TestScoreTeam:
             "rb3": {"projections": {"half_ppr": 150.0}, "position": "RB"},
         }
         picks = [("rb1", "RB"), ("rb2", "RB"), ("rb3", "RB")]
-        score = _score_team(picks, player_data, "half_ppr", STANDARD_ROSTER)
+        score = _score_team(picks, _proj(player_data, "half_ppr"), STANDARD_ROSTER)
         # RB1+RB2 fill 2 RB slots; RB3 fills FLEX
         assert score == pytest.approx(250.0 + 200.0 + 150.0)
 
@@ -231,8 +239,8 @@ class TestScoreTeam:
             }
         }
         picks = [("qb1", "QB")]
-        assert _score_team(picks, player_data, "standard", STANDARD_ROSTER) == pytest.approx(100.0)
-        assert _score_team(picks, player_data, "full_ppr", STANDARD_ROSTER) == pytest.approx(300.0)
+        assert _score_team(picks, _proj(player_data, "standard"), STANDARD_ROSTER) == pytest.approx(100.0)
+        assert _score_team(picks, _proj(player_data, "full_ppr"), STANDARD_ROSTER) == pytest.approx(300.0)
 
 
 # ── MonteCarloSimulator.evaluate_candidates ───────────────────────────
@@ -353,6 +361,8 @@ class TestHardCaps:
         vor_sorted = MonteCarloSimulator._build_vor_sorted(available_ids, vor_results)
         adp_sorted = MonteCarloSimulator._build_adp_sorted(available_ids, player_data)
         base_counts = MonteCarloSimulator._extract_team_pos_counts(state)
+        proj_lookup = {pid: d.get("projections", {}).get("half_ppr", 0.0)
+                       for pid, d in player_data.items()}
         rng = np.random.default_rng(42)
 
         for _ in range(10):
@@ -368,6 +378,7 @@ class TestHardCaps:
                 adp_sorted=adp_sorted,
                 base_team_pos_counts=base_counts,
                 player_data=player_data,
+                projections_lookup=proj_lookup,
                 existing_my_picks=[],
                 depth=5,
                 rng=rng,
@@ -390,6 +401,8 @@ class TestHardCaps:
         vor_sorted = MonteCarloSimulator._build_vor_sorted(available_ids, vor_results)
         adp_sorted = MonteCarloSimulator._build_adp_sorted(available_ids, player_data)
         base_counts = MonteCarloSimulator._extract_team_pos_counts(state)
+        proj_lookup = {pid: d.get("projections", {}).get("half_ppr", 0.0)
+                       for pid, d in player_data.items()}
 
         # Run simulation; if hard cap works correctly this should not crash and
         # should return a finite non-negative score.
@@ -405,6 +418,7 @@ class TestHardCaps:
             adp_sorted=adp_sorted,
             base_team_pos_counts=base_counts,
             player_data=player_data,
+            projections_lookup=proj_lookup,
             existing_my_picks=[],
             depth=5,
             rng=np.random.default_rng(0),
@@ -600,6 +614,8 @@ class TestStochasticity:
             state, player_data
         )
         rng = np.random.default_rng(42)
+        proj_lookup = {pid: d.get("projections", {}).get("half_ppr", 0.0)
+                       for pid, d in player_data.items()}
 
         scores = [
             sim._simulate_single(
@@ -614,6 +630,7 @@ class TestStochasticity:
                 adp_sorted=adp_sorted,
                 base_team_pos_counts=base_counts,
                 player_data=player_data,
+                projections_lookup=proj_lookup,
                 existing_my_picks=[],
                 depth=3,
                 rng=rng,

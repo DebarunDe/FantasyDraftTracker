@@ -147,6 +147,14 @@ class MonteCarloSimulator:
             if player_data.get(pid, {}).get("position", "")
         ]
 
+        # Pre-build projections lookup: one dict access instead of three nested
+        # accesses (player_data[pid]["projections"][scoring_format]) inside
+        # the hot _score_team path that runs 200 × 15 = 3,000 times per call.
+        projections_lookup: Dict[str, float] = {
+            pid: data.get("projections", {}).get(self.scoring_format, 0.0)
+            for pid, data in player_data.items()
+        }
+
         # Single RNG instance shared across all simulations in this call.
         # numpy's default_rng() uses OS entropy; no manual seed needed.
         rng = np.random.default_rng()
@@ -171,6 +179,7 @@ class MonteCarloSimulator:
                     adp_sorted=adp_sorted,
                     base_team_pos_counts=team_pos_counts,
                     player_data=player_data,
+                    projections_lookup=projections_lookup,
                     existing_my_picks=existing_my_picks,
                     depth=depth,
                     rng=rng,
@@ -202,6 +211,7 @@ class MonteCarloSimulator:
         adp_sorted: List[Tuple[str, str]],
         base_team_pos_counts: Dict[int, Dict[str, int]],
         player_data: Dict[str, Dict],
+        projections_lookup: Dict[str, float],
         existing_my_picks: List[Tuple[str, str]],
         depth: int,
         rng: "np.random.Generator",
@@ -210,7 +220,9 @@ class MonteCarloSimulator:
 
         Returns the human team's starting-lineup projected points.
         The candidate player is always taken first.  Subsequent picks:
-        - Human team: deterministic greedy VOR (optimal future play).
+        - Human team: deterministic greedy VOR (optimal future play) using a
+          cursor that advances monotonically through ``vor_sorted`` so we never
+          re-scan players already taken or at position-cap.
         - Computer teams: stochastic top-K ADP sampling via ``rng``
           (models realistic draft-room variance across simulations).
         """
@@ -231,6 +243,11 @@ class MonteCarloSimulator:
                 team_pos_counts[my_team_id].get(cand_pos, 0) + 1
             )
 
+        # Cursor for my team's VOR picks: advances monotonically through
+        # vor_sorted so each simulation sweeps the list at most once total
+        # instead of re-scanning from 0 on every one of my team's picks.
+        my_vor_cursor: int = 0
+
         # Simulate picks for the next `depth` rounds.
         start_pick = current_pick + 1
         end_pick = start_pick + depth * league_size - 1
@@ -243,7 +260,9 @@ class MonteCarloSimulator:
             pos_counts = team_pos_counts[team_id]
 
             if team_id == my_team_id:
-                chosen = _pick_by_vor(available, vor_sorted, pos_counts)
+                chosen, my_vor_cursor = _pick_by_vor(
+                    available, vor_sorted, pos_counts, my_vor_cursor
+                )
             else:
                 chosen = _pick_by_adp(available, adp_sorted, pos_counts, rng)
 
@@ -257,7 +276,7 @@ class MonteCarloSimulator:
             if team_id == my_team_id and chosen_pos:
                 my_picks.append((chosen, chosen_pos))
 
-        return _score_team(my_picks, player_data, self.scoring_format, roster_slots)
+        return _score_team(my_picks, projections_lookup, roster_slots)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -354,14 +373,40 @@ def _pick_by_vor(
     available: set,
     vor_sorted: List[Tuple[str, str]],
     pos_counts: Dict[str, int],
-) -> Optional[str]:
-    """Return the highest-VOR available player that respects hard caps."""
-    for pid, pos in vor_sorted:
-        if pid in available:
-            cap = POSITION_HARD_CAPS.get(pos, 999)
-            if pos_counts.get(pos, 0) < cap:
-                return pid
-    return None
+    cursor: int = 0,
+) -> Tuple[Optional[str], int]:
+    """Return ``(player_id, new_cursor)`` for the highest-VOR available pick.
+
+    The ``cursor`` parameter lets the caller resume scanning from where the
+    previous call left off.  Because my team's position counts only grow (caps
+    are never un-hit) and taken players are never re-added to ``available``,
+    the cursor can advance monotonically — each entry in ``vor_sorted`` is
+    visited at most once per simulation instead of at most once per pick.
+
+    Args:
+        available: Set of currently available player IDs.
+        vor_sorted: Players sorted by VOR descending as ``(player_id, position)``.
+        pos_counts: Position counts already drafted by this team.
+        cursor: Index into ``vor_sorted`` to start scanning from.
+
+    Returns:
+        ``(chosen_player_id, cursor_position)`` where ``cursor_position`` is the
+        index of the chosen player (caller should pass the same value next time;
+        the cursor will naturally advance past the now-taken player on the next
+        call).  Returns ``(None, cursor)`` if no valid pick exists.
+    """
+    i = cursor
+    while i < len(vor_sorted):
+        pid, pos = vor_sorted[i]
+        if pid not in available:
+            i += 1
+            continue
+        cap = POSITION_HARD_CAPS.get(pos, 999)
+        if pos_counts.get(pos, 0) >= cap:
+            i += 1
+            continue
+        return pid, i
+    return None, i
 
 
 def _pick_by_adp(
@@ -400,8 +445,7 @@ def _pick_by_adp(
 
 def _score_team(
     picks: List[Tuple[str, str]],
-    player_data: Dict[str, Dict],
-    scoring_format: str,
+    projections_lookup: Dict[str, float],
     roster_slots: Dict[str, int],
 ) -> float:
     """Sum projected points for the optimal starting lineup from *picks*.
@@ -412,8 +456,9 @@ def _score_team(
 
     Args:
         picks: List of ``(player_id, position)`` tuples (existing + simulated).
-        player_data: Full player data snapshot.
-        scoring_format: Scoring format key for ``projections``.
+        projections_lookup: Pre-built ``{player_id: projected_pts}`` dict for
+            the current scoring format — one lookup instead of three nested
+            accesses through ``player_data["projections"][scoring_format]``.
         roster_slots: Slot configuration, e.g. ``{"QB": 1, "RB": 2, ...}``.
 
     Returns:
@@ -425,7 +470,7 @@ def _score_team(
     # Group projected points by position (desc sorted for starter selection).
     by_position: Dict[str, List[float]] = defaultdict(list)
     for pid, pos in picks:
-        pts = player_data.get(pid, {}).get("projections", {}).get(scoring_format, 0.0)
+        pts = projections_lookup.get(pid, 0.0)
         by_position[pos].append(pts)
 
     for pos in by_position:
