@@ -25,7 +25,7 @@ from src.simulation_engine.monte_carlo import MonteCarloSimulator
 from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
-# Standard 14-slot roster used across all benchmarks
+# Standard 15-slot roster used across all benchmarks
 STANDARD_ROSTER = {
     "QB": 1, "RB": 2, "WR": 2, "TE": 1,
     "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
