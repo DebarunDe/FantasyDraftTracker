@@ -469,3 +469,184 @@ class TestShowVorRecommendations:
 
         assert "Recommendations" in text
         assert "Josh Allen" in text
+
+
+# ── _reach_label tests ───────────────────────────────────────────────
+
+
+class TestReachLabel:
+    def test_strong_steal(self):
+        label = DraftDisplay._reach_label(50, 20)  # +30 picks past ADP
+        assert "STEAL" in label
+        assert "30" in label
+
+    def test_mild_steal(self):
+        label = DraftDisplay._reach_label(30, 20)  # +10 picks past ADP
+        assert "Value" in label
+        assert "10" in label
+
+    def test_reach(self):
+        label = DraftDisplay._reach_label(10, 25)  # -15 picks before ADP
+        assert "REACH" in label
+        assert "15" in label
+
+    def test_within_threshold_returns_empty(self):
+        label = DraftDisplay._reach_label(10, 13)  # -3 picks (within ±7)
+        assert label == ""
+
+    def test_no_adp_returns_empty(self):
+        label = DraftDisplay._reach_label(10, 0)
+        assert label == ""
+
+
+# ── show_pick_banner with reach/steal tests ──────────────────────────
+
+
+class TestShowPickBannerReachSteal:
+    def test_shows_adp_when_present(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        pick = Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB")
+        player_info = {
+            "name": "Josh Allen", "position": "QB", "team": "BUF", "overall_rank": 5
+        }
+        display.show_pick_banner(pick, player_info, "My Team")
+        text = output.getvalue()
+        assert "ADP #5" in text
+
+    def test_shows_steal_label(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        pick = Pick.create(pick_number=50, round=5, team_id=0, player_id="qb1", slot="QB")
+        player_info = {
+            "name": "Josh Allen", "position": "QB", "team": "BUF", "overall_rank": 10
+        }
+        display.show_pick_banner(pick, player_info, "My Team")
+        text = output.getvalue()
+        assert "STEAL" in text
+
+    def test_shows_reach_label(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        pick = Pick.create(pick_number=5, round=1, team_id=0, player_id="qb1", slot="QB")
+        player_info = {
+            "name": "Josh Allen", "position": "QB", "team": "BUF", "overall_rank": 30
+        }
+        display.show_pick_banner(pick, player_info, "My Team")
+        text = output.getvalue()
+        assert "REACH" in text
+
+    def test_no_adp_omits_label(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        pick = Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB")
+        player_info = {"name": "Josh Allen", "position": "QB", "team": "BUF"}
+        display.show_pick_banner(pick, player_info, "My Team")
+        text = output.getvalue()
+        assert "ADP" not in text
+        assert "STEAL" not in text
+        assert "REACH" not in text
+
+
+# ── show_full_draft_board tests ──────────────────────────────────────
+
+
+class TestShowFullDraftBoard:
+    def test_no_picks_shows_message(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        display.show_full_draft_board([], {}, [])
+        assert "No picks yet" in output.getvalue()
+
+    def test_shows_all_picks(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        state = _make_draft_state()
+        picks = [
+            Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB"),
+            Pick.create(pick_number=2, round=1, team_id=1, player_id="rb1", slot="RB"),
+        ]
+        display.show_full_draft_board(picks, state.player_data, state.teams)
+        text = output.getvalue()
+        assert "Josh Allen" in text
+        assert "Saquon Barkley" in text
+
+    def test_shows_reach_column(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        state = _make_draft_state()
+        picks = [
+            Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB"),
+        ]
+        display.show_full_draft_board(picks, state.player_data, state.teams)
+        text = output.getvalue()
+        assert "ADP" in text or "Δ" in text
+
+    def test_shows_pick_count_in_title(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        state = _make_draft_state()
+        picks = [
+            Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB"),
+        ]
+        display.show_full_draft_board(picks, state.player_data, state.teams)
+        text = output.getvalue()
+        assert "1 pick" in text
+
+
+# ── show_team_comparison tests ───────────────────────────────────────
+
+
+class TestShowTeamComparison:
+    def _make_roster_slots(self):
+        return {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6}
+
+    def test_shows_all_teams(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        state = _make_draft_state()
+        display.show_team_comparison(
+            state.teams,
+            state.player_data,
+            "half_ppr",
+            self._make_roster_slots(),
+            [],
+        )
+        text = output.getvalue()
+        assert "My Team" in text
+        assert "CPU 1" in text
+        assert "CPU 2" in text
+
+    def test_shows_comparison_title(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        state = _make_draft_state()
+        display.show_team_comparison(
+            state.teams,
+            state.player_data,
+            "half_ppr",
+            self._make_roster_slots(),
+            [],
+        )
+        text = output.getvalue()
+        assert "Team Comparison" in text
+
+    def test_shows_steal_for_large_delta(self):
+        console, output = _make_console()
+        display = DraftDisplay(console)
+        state = _make_draft_state()
+        # Pick #50 for a player with ADP=10 → +40 = strong steal
+        state.player_data["qb1"]["overall_rank"] = 10
+        state.teams[0].picks = ["qb1"]
+        state.teams[0].roster["QB"] = ["qb1"]
+        pick = Pick.create(pick_number=50, round=5, team_id=0, player_id="qb1", slot="QB")
+        display.show_team_comparison(
+            state.teams,
+            state.player_data,
+            "half_ppr",
+            self._make_roster_slots(),
+            [pick],
+        )
+        text = output.getvalue()
+        assert "Josh Allen" in text
+        assert "+40" in text

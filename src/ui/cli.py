@@ -16,6 +16,7 @@ from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.config import AVAILABLE_PLAYERS_DEFAULT_LIMIT, VOR_RECOMMENDATIONS_COUNT
 from src.ui.display import DraftDisplay
+from src.ui.export import DraftExporter
 from src.ui.player_search import PlayerSearcher
 from src.ui.setup_wizard import SetupWizard
 
@@ -209,7 +210,7 @@ class DraftApp:
         self.console.print()
         self.console.print(
             "[dim]\\[name/# to pick] \\[a]vailable \\[r]oster "
-            "\\[s]earch \\[rec] \\[h]elp \\[q]uit[/dim]"
+            "\\[s]earch \\[rec] \\[b]oard \\[compare] \\[export] \\[h]elp \\[q]uit[/dim]"
         )
 
     def _get_user_pick(self) -> Optional[str]:
@@ -325,11 +326,12 @@ class DraftApp:
             return "quit"
 
         if command in ("h", "help"):
-            self.display.show_help()
+            self.display.show_help(is_manual_tracker=self._is_manual_tracker)
             return None
 
         if command in ("b", "board"):
-            return "redisplay"
+            self._show_full_board()
+            return None
 
         if command in ("a", "available"):
             self._handle_available(args, scoring)
@@ -363,6 +365,14 @@ class DraftApp:
                 return None
             return self._simulate_rest_of_draft()
 
+        if command in ("compare", "comp"):
+            self._handle_compare()
+            return None
+
+        if command == "export":
+            self._handle_export()
+            return None
+
         return None
 
     def _simulate_rest_of_draft(self) -> Optional[str]:
@@ -392,6 +402,36 @@ class DraftApp:
             self.display.show_success("Simulation complete!")
             return "simulate"
         return None
+
+    def _show_full_board(self) -> None:
+        """Display the complete draft board with all picks and reach/steal column."""
+        self.display.show_full_draft_board(
+            self.draft_state.all_picks,
+            self.draft_state.player_data,
+            self.draft_state.teams,
+        )
+
+    def _handle_compare(self) -> None:
+        """Display side-by-side team comparison table."""
+        self.display.show_team_comparison(
+            self.draft_state.teams,
+            self.draft_state.player_data,
+            self.draft_state.league_config.scoring_format,
+            self.draft_state.league_config.roster_slots,
+            self.draft_state.all_picks,
+        )
+
+    def _handle_export(self) -> None:
+        """Export draft picks to CSV."""
+        exporter = DraftExporter()
+        try:
+            path = exporter.export_to_csv(
+                self.draft_state,
+                self.draft_state.league_config.scoring_format,
+            )
+            self.display.show_success(f"Draft exported to: {path}")
+        except OSError as e:
+            self.display.show_error(f"Export failed: {e}")
 
     def _handle_available(self, args: str, scoring: str) -> None:
         """Handle 'available' command with optional position/limit args."""
@@ -486,20 +526,35 @@ class DraftApp:
         self.console.print("Goodbye!")
 
     def _post_draft_menu(self) -> None:
-        """After draft completion, let user view rosters."""
+        """After draft completion, let user view rosters and analytics."""
         scoring = self.draft_state.league_config.scoring_format
         self.console.print()
+        self.console.print(
+            "[dim]Post-draft options: team #, all, compare, board, export, quit[/dim]"
+        )
 
         while True:
             try:
                 raw = self.console.input(
-                    "View team roster? [team #/all/quit to menu]: "
+                    "Post-draft > "
                 ).strip().lower()
             except EOFError:
                 break
 
             if raw in ("q", "quit", ""):
                 break
+
+            if raw in ("compare", "comp"):
+                self._handle_compare()
+                continue
+
+            if raw in ("b", "board"):
+                self._show_full_board()
+                continue
+
+            if raw == "export":
+                self._handle_export()
+                continue
 
             if raw == "all":
                 for team in self.draft_state.teams:
@@ -528,7 +583,9 @@ class DraftApp:
                         f"Team number must be 1-{self.draft_state.league_config.league_size}"
                     )
             except ValueError:
-                self.display.show_error("Enter a team number, 'all', or 'quit'.")
+                self.display.show_error(
+                    "Enter a team number, 'all', 'compare', 'board', 'export', or 'quit'."
+                )
 
 
 def main():
