@@ -11,8 +11,10 @@ from rich.text import Text
 
 from src.ui.config import (
     POSITION_COLORS,
+    REACH_STEAL_LABEL_THRESHOLD,
     RECENT_PICKS_DISPLAY_COUNT,
     SCORING_DISPLAY_NAMES,
+    STEAL_STRONG_THRESHOLD,
     VOR_RECOMMENDATIONS_COUNT,
 )
 
@@ -54,17 +56,41 @@ class DraftDisplay:
         )
         self.console.print(Panel(body, title=title, border_style="bright_blue"))
 
+    @staticmethod
+    def _reach_label(pick_number: int, overall_rank: int) -> str:
+        """Return Rich-markup reach/steal label for a pick vs ADP.
+
+        delta = pick_number - overall_rank (positive = fell = steal, negative = reach)
+        Returns empty string when the delta is within normal variation.
+        """
+        if not overall_rank:
+            return ""
+        delta = pick_number - overall_rank
+        if delta >= STEAL_STRONG_THRESHOLD:
+            return f"[bold green]▲ STEAL +{delta}[/bold green]"
+        if delta >= REACH_STEAL_LABEL_THRESHOLD:
+            return f"[green]Value +{delta}[/green]"
+        if delta <= -REACH_STEAL_LABEL_THRESHOLD:
+            return f"[red]▼ REACH {delta}[/red]"
+        return ""
+
     def show_pick_banner(self, pick, player_info: Dict, team_name: str) -> None:
         """Display a prominent banner for a just-made pick."""
         pos = player_info.get("position", "?")
         color = POSITION_COLORS.get(pos, "white")
         nfl_team = player_info.get("team", "?")
         slot = pick.slot or pos
+        adp = player_info.get("overall_rank", 0)
+        reach = self._reach_label(pick.pick_number, adp)
+
+        adp_str = f"  ADP #{adp}" if adp else ""
+        reach_str = f"  {reach}" if reach else ""
 
         body = (
             f"  PICK #{pick.pick_number}: [bold]{player_info.get('name', '?')}[/bold] "
             f"([{color}]{pos}[/{color}] - {nfl_team})\n"
             f"  {team_name}  |  Round {pick.round}  |  Slot: {slot}"
+            f"{adp_str}{reach_str}"
         )
         self.console.print(Panel(body, border_style="bold green"))
 
@@ -334,6 +360,180 @@ class DraftDisplay:
         return displayed
 
     # ------------------------------------------------------------------
+    # Full draft board (all picks with reach/steal)
+    # ------------------------------------------------------------------
+
+    def show_full_draft_board(
+        self,
+        all_picks: list,
+        player_data: Dict,
+        teams: list,
+    ) -> None:
+        """Display all picks made so far with reach/steal delta column."""
+        if not all_picks:
+            self.console.print("[dim]No picks yet.[/dim]")
+            return
+
+        table = Table(
+            title=f"Draft Board ({len(all_picks)} picks)",
+            show_lines=False,
+            pad_edge=False,
+        )
+        table.add_column("Rd", justify="right", style="dim", width=3)
+        table.add_column("Pick", justify="right", width=4)
+        table.add_column("Team", width=16)
+        table.add_column("Player", width=24)
+        table.add_column("Pos", width=4)
+        table.add_column("Slot", width=5)
+        table.add_column("Proj Pts", justify="right", width=8)
+        table.add_column("ADP", justify="right", width=4)
+        table.add_column("Δ", justify="right", width=7)
+
+        for pick in all_picks:
+            info = player_data.get(pick.player_id, {})
+            pos = info.get("position", "?")
+            color = POSITION_COLORS.get(pos, "white")
+            team_name = teams[pick.team_id].team_name if pick.team_id < len(teams) else "?"
+            adp = info.get("overall_rank", 0)
+
+            # Projected points (display format-agnostic — use first available)
+            projs = info.get("projections", {})
+            proj = next(iter(projs.values()), 0) if projs else 0
+            proj_str = f"{proj:.1f}" if proj else "-"
+
+            adp_str = str(adp) if adp else "-"
+            delta_str = ""
+            if adp:
+                delta = pick.pick_number - adp
+                if delta >= STEAL_STRONG_THRESHOLD:
+                    delta_str = f"[bold green]+{delta}[/bold green]"
+                elif delta >= REACH_STEAL_LABEL_THRESHOLD:
+                    delta_str = f"[green]+{delta}[/green]"
+                elif delta <= -REACH_STEAL_LABEL_THRESHOLD:
+                    delta_str = f"[red]{delta}[/red]"
+                else:
+                    delta_str = f"[dim]{'+' if delta > 0 else ''}{delta}[/dim]"
+
+            table.add_row(
+                str(pick.round),
+                str(pick.pick_number),
+                team_name,
+                info.get("name", pick.player_id),
+                f"[{color}]{pos}[/{color}]",
+                pick.slot or "-",
+                proj_str,
+                adp_str,
+                delta_str,
+            )
+
+        self.console.print(table)
+
+    # ------------------------------------------------------------------
+    # Team comparison
+    # ------------------------------------------------------------------
+
+    def show_team_comparison(
+        self,
+        teams: list,
+        player_data: Dict,
+        scoring_format: str,
+        roster_slots: Dict,
+        all_picks: list,
+    ) -> None:
+        """Display side-by-side team projected points and roster status."""
+        total_roster_slots = sum(roster_slots.values())
+
+        # Pre-compute per-team stats
+        # Build pick lookup: player_id → pick for reach calc
+        pick_by_player: Dict[str, object] = {p.player_id: p for p in all_picks}
+
+        table = Table(title="Team Comparison", show_lines=True, pad_edge=False)
+        table.add_column("#", justify="right", width=3)
+        table.add_column("Team", width=18)
+        table.add_column("Proj Pts", justify="right", width=9)
+        for pos in ("QB", "RB", "WR", "TE"):
+            if pos in roster_slots:
+                table.add_column(pos, justify="right", width=7)
+        table.add_column("Picks", justify="right", width=6)
+        table.add_column("Avg Δ", justify="right", width=7)
+        table.add_column("Best Steal", width=20)
+        table.add_column("Worst Reach", width=20)
+
+        teams_sorted = sorted(
+            teams,
+            key=lambda t: self._team_starter_pts(t, player_data, scoring_format),
+            reverse=True,
+        )
+
+        for rank, team in enumerate(teams_sorted, 1):
+            starter_pts = self._team_starter_pts(team, player_data, scoring_format)
+            total_picks = team.get_total_picks()
+            human_tag = " [bold green](You)[/bold green]" if team.is_human else ""
+            status = f"{total_picks}/{total_roster_slots}"
+
+            # Per-position starter points
+            pos_pts = {}
+            for pos in ("QB", "RB", "WR", "TE"):
+                if pos not in roster_slots:
+                    continue
+                pts = sum(
+                    player_data.get(pid, {}).get("projections", {}).get(scoring_format, 0)
+                    for pid in team.roster.get(pos, [])
+                )
+                pos_pts[pos] = pts
+
+            # Reach/steal analysis across team's picks
+            deltas = []
+            best_steal: Optional[Dict] = None
+            worst_reach: Optional[Dict] = None
+            for pid in team.picks:
+                info = player_data.get(pid, {})
+                adp = info.get("overall_rank", 0)
+                pick = pick_by_player.get(pid)
+                if not adp or not pick:
+                    continue
+                delta = pick.pick_number - adp
+                deltas.append(delta)
+                if best_steal is None or delta > best_steal["delta"]:
+                    best_steal = {"name": info.get("name", "?"), "delta": delta}
+                if worst_reach is None or delta < worst_reach["delta"]:
+                    worst_reach = {"name": info.get("name", "?"), "delta": delta}
+
+            avg_delta = sum(deltas) / len(deltas) if deltas else 0
+            avg_str = f"{avg_delta:+.1f}" if deltas else "-"
+
+            best_str = ""
+            if best_steal and best_steal["delta"] >= REACH_STEAL_LABEL_THRESHOLD:
+                best_str = f"[green]{best_steal['name']} (+{best_steal['delta']})[/green]"
+            worst_str = ""
+            if worst_reach and worst_reach["delta"] <= -REACH_STEAL_LABEL_THRESHOLD:
+                worst_str = f"[red]{worst_reach['name']} ({worst_reach['delta']})[/red]"
+
+            row = [
+                str(rank),
+                f"{team.team_name}{human_tag}",
+                f"{starter_pts:.1f}",
+            ]
+            for pos in ("QB", "RB", "WR", "TE"):
+                if pos in roster_slots:
+                    row.append(f"{pos_pts.get(pos, 0):.1f}" if pos_pts.get(pos) else "-")
+            row.extend([status, avg_str, best_str, worst_str])
+            table.add_row(*row)
+
+        self.console.print(table)
+
+    @staticmethod
+    def _team_starter_pts(team, player_data: Dict, scoring_format: str) -> float:
+        """Projected points for a team's starting lineup (excludes bench)."""
+        total = 0.0
+        for slot, pids in team.roster.items():
+            if slot == "BENCH":
+                continue
+            for pid in pids:
+                total += player_data.get(pid, {}).get("projections", {}).get(scoring_format, 0)
+        return total
+
+    # ------------------------------------------------------------------
     # Draft summary
     # ------------------------------------------------------------------
 
@@ -375,8 +575,13 @@ class DraftDisplay:
     # Utility
     # ------------------------------------------------------------------
 
-    def show_help(self) -> None:
+    def show_help(self, is_manual_tracker: bool = False) -> None:
         """Display available commands."""
+        sim_line = (
+            ""
+            if is_manual_tracker
+            else "  [cyan]sim[/cyan]             Simulate all remaining picks automatically\n"
+        )
         help_text = (
             "[bold]Commands:[/bold]\n"
             "  [cyan]<name>[/cyan]          Search and draft a player by name\n"
@@ -388,9 +593,11 @@ class DraftDisplay:
             "  [cyan]r <n>[/cyan]           Show team N's roster (e.g. 'r 3')\n"
             "  [cyan]s <query>[/cyan]       Search players (e.g. 's kelce')\n"
             "  [cyan]rec[/cyan]             Show VOR recommendations\n"
-            "  [cyan]b[/cyan] / [cyan]board[/cyan]      Re-display draft board\n"
+            "  [cyan]b[/cyan] / [cyan]board[/cyan]      Show full draft board with reach/steal\n"
+            "  [cyan]compare[/cyan]         Compare all teams' projected points\n"
+            "  [cyan]export[/cyan]          Export draft picks to CSV\n"
             "  [cyan]save[/cyan]            Save draft state\n"
-            "  [cyan]sim[/cyan]             Simulate all remaining picks automatically\n"
+            + sim_line +
             "  [cyan]h[/cyan] / [cyan]help[/cyan]       Show this help\n"
             "  [cyan]q[/cyan] / [cyan]quit[/cyan]       Save and quit"
         )
