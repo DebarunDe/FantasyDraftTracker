@@ -151,7 +151,12 @@ class TestDraftStateCreation:
 
     def test_draft_order(self):
         state = _make_draft_state(league_size=6)
-        assert state.draft_order == [0, 1, 2, 3, 4, 5]
+        # draft_order is 2D: one list per round
+        assert isinstance(state.draft_order, list)
+        assert isinstance(state.draft_order[0], list)
+        # Odd rounds: ascending; even rounds: descending
+        assert state.draft_order[0] == [0, 1, 2, 3, 4, 5]  # Round 1 (odd)
+        assert state.draft_order[1] == [5, 4, 3, 2, 1, 0]  # Round 2 (even)
 
     def test_unique_draft_id(self):
         s1 = _make_draft_state()
@@ -322,3 +327,90 @@ class TestDraftCompletion:
         pick_before = state.current_pick
         state.advance_to_next_pick()
         assert state.current_pick == pick_before
+
+
+# ── Traded Picks ──────────────────────────────────────────────────────
+
+class TestPickTrades:
+    """Tests for apply_pick_trade() and the resulting draft order."""
+
+    def test_apply_trade_changes_slot(self):
+        """Trade reassigns the correct slot in the round."""
+        state = _make_draft_state(league_size=4)
+        # Round 1 default (odd): [0, 1, 2, 3]
+        state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=3)
+        assert state.draft_order[0] == [0, 3, 2, 3]  # slot 1 flipped 1→3
+
+    def test_apply_trade_recorded_in_history(self):
+        state = _make_draft_state(league_size=4)
+        state.apply_pick_trade(from_team_id=2, round_num=3, to_team_id=0)
+        assert len(state.pick_trades) == 1
+        assert state.pick_trades[0] == {"from_team_id": 2, "round": 3, "to_team_id": 0}
+
+    def test_apply_multiple_trades(self):
+        """Two trades in different rounds are both recorded."""
+        state = _make_draft_state(league_size=4)
+        state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=0)
+        state.apply_pick_trade(from_team_id=0, round_num=3, to_team_id=1)
+        assert len(state.pick_trades) == 2
+        assert state.draft_order[0] == [0, 0, 2, 3]   # Round 1: Team 1 → Team 0
+        assert state.draft_order[2] == [1, 1, 2, 3]   # Round 3: Team 0 → Team 1
+
+    def test_human_gets_extra_pick_in_round(self):
+        """Team 0 receives another team's pick so it appears twice in that round."""
+        state = _make_draft_state(league_size=4)
+        state.apply_pick_trade(from_team_id=3, round_num=1, to_team_id=0)
+        r1 = state.draft_order[0]
+        assert r1.count(0) == 2  # Team 0 picks twice
+        assert 3 not in r1       # Team 3 does not pick
+
+    def test_apply_trade_invalid_round_raises(self):
+        state = _make_draft_state(league_size=4)
+        total_rounds = state.league_config.total_rounds()
+        with pytest.raises(ValueError, match="out of range"):
+            state.apply_pick_trade(from_team_id=0, round_num=total_rounds + 1, to_team_id=1)
+
+    def test_apply_trade_round_zero_raises(self):
+        state = _make_draft_state(league_size=4)
+        with pytest.raises(ValueError, match="out of range"):
+            state.apply_pick_trade(from_team_id=0, round_num=0, to_team_id=1)
+
+    def test_apply_trade_invalid_from_team_id_raises(self):
+        state = _make_draft_state(league_size=4)
+        with pytest.raises(ValueError, match="out of range"):
+            state.apply_pick_trade(from_team_id=4, round_num=1, to_team_id=0)
+
+    def test_apply_trade_invalid_to_team_id_raises(self):
+        state = _make_draft_state(league_size=4)
+        with pytest.raises(ValueError, match="out of range"):
+            state.apply_pick_trade(from_team_id=0, round_num=1, to_team_id=99)
+
+    def test_apply_trade_negative_from_team_id_raises(self):
+        state = _make_draft_state(league_size=4)
+        with pytest.raises(ValueError, match="out of range"):
+            state.apply_pick_trade(from_team_id=-1, round_num=1, to_team_id=0)
+
+    def test_apply_trade_team_doesnt_own_pick_raises(self):
+        """After trading away a pick, trying to trade it again should raise."""
+        state = _make_draft_state(league_size=4)
+        state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=0)
+        with pytest.raises(ValueError, match="does not have a pick"):
+            state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=2)
+
+    def test_advance_uses_traded_order(self):
+        """advance_to_next_pick() picks the right team after a trade."""
+        state = _make_draft_state(league_size=4)
+        # Trade Round 1, pick slot 1 (Team 1) to Team 3
+        state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=3)
+        # Advance twice: pick 1 = Team 0, pick 2 = Team 3 (was Team 1)
+        assert state.current_team_id == 0  # pick 1
+        state.advance_to_next_pick()
+        assert state.current_team_id == 3  # pick 2 (traded)
+
+    def test_generate_snake_order_small(self):
+        order = DraftState._generate_snake_order(league_size=4, total_rounds=3)
+        assert order == [
+            [0, 1, 2, 3],  # Round 1 (odd)
+            [3, 2, 1, 0],  # Round 2 (even)
+            [0, 1, 2, 3],  # Round 3 (odd)
+        ]

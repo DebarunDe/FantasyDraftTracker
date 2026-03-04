@@ -300,3 +300,88 @@ class TestCreateDraftWithRealData:
             assert "team" in info, f"{pid} missing team"
             assert "projections" in info, f"{pid} missing projections"
             assert "baseline_vor" in info, f"{pid} missing baseline_vor"
+
+    def test_pick_trades_applied_to_draft_order(self):
+        """Trades passed to create_draft() are reflected in draft_order."""
+        init = DraftInitializer()
+        trades = [
+            {"from_team_id": 1, "round": 1, "to_team_id": 0},
+            {"from_team_id": 0, "round": 3, "to_team_id": 1},
+        ]
+        state = init.create_draft(
+            league_size=4,
+            scoring_format="half_ppr",
+            roster_slots=DraftInitializer.get_default_roster_slots(),
+            team_names=[f"Team {i + 1}" for i in range(4)],
+            human_team_id=0,
+            data_year=2025,
+            pick_trades=trades,
+        )
+        # Round 1 slot 1 (was Team 1) → Team 0
+        assert state.draft_order[0][1] == 0
+        # Round 3 slot 0 (was Team 0) → Team 1
+        assert state.draft_order[2][0] == 1
+        assert len(state.pick_trades) == 2
+
+    def test_no_pick_trades_leaves_default_order(self):
+        """create_draft() with no pick_trades preserves standard snake order."""
+        init = DraftInitializer()
+        state = init.create_draft(
+            league_size=4,
+            scoring_format="half_ppr",
+            roster_slots=DraftInitializer.get_default_roster_slots(),
+            team_names=[f"Team {i + 1}" for i in range(4)],
+            human_team_id=0,
+            data_year=2025,
+        )
+        assert state.draft_order[0] == [0, 1, 2, 3]   # Round 1 ascending
+        assert state.draft_order[1] == [3, 2, 1, 0]   # Round 2 descending
+        assert state.pick_trades == []
+
+
+# ── _validate_pick_trades ──────────────────────────────────────────────
+
+
+class TestValidatePickTrades:
+    """Tests for DraftInitializer._validate_pick_trades()."""
+
+    def test_valid_trades_pass(self):
+        DraftInitializer._validate_pick_trades(
+            [{"from_team_id": 0, "round": 1, "to_team_id": 1}],
+            league_size=4,
+        )  # Should not raise
+
+    def test_missing_key_raises(self):
+        with pytest.raises(ValueError, match="missing required keys"):
+            DraftInitializer._validate_pick_trades(
+                [{"from_team_id": 0, "to_team_id": 1}],  # no "round"
+                league_size=4,
+            )
+
+    def test_from_team_id_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="out of range"):
+            DraftInitializer._validate_pick_trades(
+                [{"from_team_id": 4, "round": 1, "to_team_id": 0}],
+                league_size=4,
+            )
+
+    def test_to_team_id_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="out of range"):
+            DraftInitializer._validate_pick_trades(
+                [{"from_team_id": 0, "round": 1, "to_team_id": 99}],
+                league_size=4,
+            )
+
+    def test_invalid_trades_rejected_by_create_draft(self):
+        """create_draft raises ValueError for malformed pick_trades."""
+        init = DraftInitializer()
+        with pytest.raises(ValueError, match="out of range"):
+            init.create_draft(
+                league_size=4,
+                scoring_format="half_ppr",
+                roster_slots=DraftInitializer.get_default_roster_slots(),
+                team_names=[f"Team {i + 1}" for i in range(4)],
+                human_team_id=0,
+                data_year=2025,
+                pick_trades=[{"from_team_id": 10, "round": 1, "to_team_id": 0}],
+            )

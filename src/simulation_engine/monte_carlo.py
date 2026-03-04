@@ -203,7 +203,7 @@ class MonteCarloSimulator:
         candidate_id: str,
         my_team_id: int,
         current_pick: int,
-        draft_order: List[int],
+        draft_order: List[List[int]],
         league_size: int,
         roster_slots: Dict[str, int],
         original_available: set,
@@ -248,9 +248,11 @@ class MonteCarloSimulator:
         # instead of re-scanning from 0 on every one of my team's picks.
         my_vor_cursor: int = 0
 
-        # Simulate picks for the next `depth` rounds.
+        # Simulate picks for the next `depth` rounds, clamped to the last
+        # pick in the draft so we never index beyond draft_order's bounds.
         start_pick = current_pick + 1
-        end_pick = start_pick + depth * league_size - 1
+        total_draft_picks = len(draft_order) * league_size
+        end_pick = min(start_pick + depth * league_size - 1, total_draft_picks)
 
         for pick_num in range(start_pick, end_pick + 1):
             if not available:
@@ -352,21 +354,16 @@ class MonteCarloSimulator:
 def _get_team_for_pick(
     pick_num: int,
     league_size: int,
-    draft_order: List[int],
+    draft_order: List[List[int]],
 ) -> int:
-    """Return team_id for *pick_num* in a snake draft.
+    """Return team_id for *pick_num* using the pre-computed 2D draft_order.
 
-    Picks are 1-indexed.  Rounds alternate direction: odd rounds go
-    left-to-right, even rounds go right-to-left in draft_order.
+    Picks are 1-indexed.  draft_order[round_idx][pick_in_round] = team_id.
     """
     pick_0 = pick_num - 1
-    round_num = pick_0 // league_size + 1
+    round_0 = pick_0 // league_size
     pos_in_round = pick_0 % league_size
-    if round_num % 2 == 1:  # odd round → ascending
-        team_index = pos_in_round
-    else:  # even round → descending
-        team_index = league_size - 1 - pos_in_round
-    return draft_order[team_index]
+    return draft_order[round_0][pos_in_round]
 
 
 def _pick_by_vor(

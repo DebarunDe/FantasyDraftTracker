@@ -155,7 +155,7 @@ class TestSaveDraft:
         required = {
             "draft_id", "league_config", "draft_start_time",
             "current_pick", "current_round", "current_team_id",
-            "draft_order", "teams", "all_picks", "available_players",
+            "draft_order", "pick_trades", "teams", "all_picks", "available_players",
             "player_data", "is_complete", "completed_at",
         }
         assert required.issubset(data.keys())
@@ -840,3 +840,64 @@ class TestIntegrationWithRealData:
         assert len(drafts) == 1
         assert drafts[0]["league_size"] == 12
         assert drafts[0]["scoring_format"] == "half_ppr"
+
+
+# ── Traded Picks Persistence ──────────────────────────────────────────
+
+
+class TestPickTradesPersistence:
+    """Verify that pick_trades survive a save/load round-trip."""
+
+    def test_pick_trades_saved_and_loaded(self, persistence):
+        state = _make_draft_state()
+        state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=0)
+        state.apply_pick_trade(from_team_id=0, round_num=3, to_team_id=1)
+
+        persistence.save_draft(state)
+        loaded = persistence.load_draft(state.draft_id)
+
+        assert loaded.pick_trades == state.pick_trades
+        assert len(loaded.pick_trades) == 2
+        assert loaded.pick_trades[0] == {"from_team_id": 1, "round": 1, "to_team_id": 0}
+
+    def test_pick_trades_in_json(self, persistence):
+        state = _make_draft_state()
+        state.apply_pick_trade(from_team_id=2, round_num=2, to_team_id=3)
+        path = persistence.save_draft(state)
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        assert "pick_trades" in data
+        assert data["pick_trades"][0]["from_team_id"] == 2
+        assert data["pick_trades"][0]["round"] == 2
+        assert data["pick_trades"][0]["to_team_id"] == 3
+
+    def test_draft_order_2d_after_trade(self, persistence):
+        """draft_order in loaded state is 2D and reflects the trade."""
+        state = _make_draft_state()
+        state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=3)
+        persistence.save_draft(state)
+        loaded = persistence.load_draft(state.draft_id)
+
+        r1 = loaded.draft_order[0]
+        assert r1[1] == 3   # slot formerly owned by Team 1 now belongs to Team 3
+
+    def test_backwards_compat_1d_draft_order(self, persistence):
+        """Old saves with a flat 1D draft_order are auto-converted to 2D on load."""
+        state = _make_draft_state(league_size=4)
+        persistence.save_draft(state)
+
+        # Corrupt the saved file to simulate an old format (1D draft_order).
+        filepath = persistence.storage_dir / f"draft_{state.draft_id}.json"
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["draft_order"] = [0, 1, 2, 3]   # old 1D format
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        loaded = persistence.load_draft(state.draft_id)
+        assert isinstance(loaded.draft_order, list)
+        assert isinstance(loaded.draft_order[0], list)
+        assert loaded.draft_order[0] == [0, 1, 2, 3]   # Round 1 ascending
+        assert loaded.draft_order[1] == [3, 2, 1, 0]   # Round 2 descending

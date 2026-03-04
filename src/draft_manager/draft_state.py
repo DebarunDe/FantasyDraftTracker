@@ -101,13 +101,29 @@ class DraftState:
     current_pick: int
     current_round: int
     current_team_id: int
-    draft_order: List[int]
+    draft_order: List[List[int]]  # [round_idx][pick_in_round] -> team_id
     teams: List[TeamRoster]
     all_picks: List[Pick]
     available_players: List[str]
     player_data: Dict[str, Dict]
+    pick_trades: List[Dict] = field(default_factory=list)  # trade history
     is_complete: bool = False
     completed_at: Optional[str] = None
+
+    @staticmethod
+    def _generate_snake_order(league_size: int, total_rounds: int) -> List[List[int]]:
+        """Pre-compute the full snake draft order as a 2D list.
+
+        draft_order[round_idx][pick_in_round] = team_id.
+        Odd rounds (1, 3, 5, …) go 0→N-1; even rounds go N-1→0.
+        """
+        order = []
+        for rnd in range(1, total_rounds + 1):
+            if rnd % 2 == 1:  # odd round: ascending
+                order.append(list(range(league_size)))
+            else:  # even round: descending
+                order.append(list(range(league_size - 1, -1, -1)))
+        return order
 
     @classmethod
     def create_new(
@@ -140,7 +156,9 @@ class DraftState:
             for i, name in enumerate(team_names)
         ]
 
-        draft_order = list(range(league_config.league_size))
+        draft_order = cls._generate_snake_order(
+            league_config.league_size, league_config.total_rounds()
+        )
         available_players = list(player_data.keys())
 
         return cls(
@@ -149,12 +167,57 @@ class DraftState:
             draft_start_time=datetime.now().isoformat(),
             current_pick=1,
             current_round=1,
-            current_team_id=draft_order[0],
+            current_team_id=draft_order[0][0],
             draft_order=draft_order,
             teams=teams,
             all_picks=[],
             available_players=available_players,
             player_data=player_data,
+            pick_trades=[],
+        )
+
+    def apply_pick_trade(
+        self, from_team_id: int, round_num: int, to_team_id: int
+    ) -> None:
+        """Transfer a pick from one team to another.
+
+        Finds the first slot in round_num's draft order currently owned by
+        from_team_id and reassigns it to to_team_id.
+
+        Raises:
+            ValueError: If round_num is out of range or from_team_id has no
+                        pick remaining in that round.
+        """
+        league_size = self.league_config.league_size
+        if not 0 <= from_team_id < league_size:
+            raise ValueError(
+                f"from_team_id {from_team_id} is out of range [0, {league_size - 1}]"
+            )
+        if not 0 <= to_team_id < league_size:
+            raise ValueError(
+                f"to_team_id {to_team_id} is out of range [0, {league_size - 1}]"
+            )
+        total_rounds = self.league_config.total_rounds()
+        if not 1 <= round_num <= total_rounds:
+            raise ValueError(
+                f"round_num {round_num} is out of range [1, {total_rounds}]"
+            )
+
+        round_slots = self.draft_order[round_num - 1]
+        for i, team_id in enumerate(round_slots):
+            if team_id == from_team_id:
+                round_slots[i] = to_team_id
+                self.pick_trades.append(
+                    {
+                        "from_team_id": from_team_id,
+                        "round": round_num,
+                        "to_team_id": to_team_id,
+                    }
+                )
+                return
+
+        raise ValueError(
+            f"Team {from_team_id} does not have a pick in Round {round_num}"
         )
 
     def get_current_team(self) -> TeamRoster:
@@ -174,29 +237,23 @@ class DraftState:
         return self.player_data.get(player_id, {})
 
     def advance_to_next_pick(self):
-        """Move to next pick (handles snake draft logic)."""
+        """Move to next pick using the pre-computed draft_order."""
         if self.is_complete:
             return
 
         self.current_pick += 1
 
-        # Update round first so team calculation uses correct direction
         self.current_round = (
             (self.current_pick - 1) // self.league_config.league_size
         ) + 1
 
-        if self.league_config.draft_type == "snake":
-            picks_in_round = (self.current_pick - 1) % self.league_config.league_size
+        round_idx = self.current_round - 1
+        picks_in_round = (self.current_pick - 1) % self.league_config.league_size
 
-            if self.current_round % 2 == 1:  # Odd rounds: 0 -> N-1
-                team_index = picks_in_round
-            else:  # Even rounds: N-1 -> 0
-                team_index = self.league_config.league_size - 1 - picks_in_round
-
-            self.current_team_id = self.draft_order[team_index]
-        else:  # Linear draft
-            team_index = (self.current_pick - 1) % self.league_config.league_size
-            self.current_team_id = self.draft_order[team_index]
+        # Guard: don't index beyond the draft (check_if_complete handles the
+        # is_complete flag; we just need to avoid an IndexError here).
+        if round_idx < len(self.draft_order):
+            self.current_team_id = self.draft_order[round_idx][picks_in_round]
 
     def check_if_complete(self) -> bool:
         """Check if draft is complete."""

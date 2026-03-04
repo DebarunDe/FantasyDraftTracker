@@ -79,6 +79,7 @@ class DraftApp:
             human_team_id=config["human_team_id"],
             draft_mode=config.get("draft_mode", "simulation"),
             data_year=config["data_year"],
+            pick_trades=config.get("pick_trades", []),
         )
         self._init_components()
         self.persistence.save_draft(self.draft_state)

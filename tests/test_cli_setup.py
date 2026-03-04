@@ -490,6 +490,7 @@ class TestConfigureDraftMode:
             "",    # Scoring default
             "",    # Roster default
             "",    # Team names default
+            "n",   # No pick trades
             "",    # Draft position default
             "",    # Data year default
             "Y",   # Confirm
@@ -513,6 +514,7 @@ class TestNewDraftFlow:
             "",    # Default scoring (half_ppr)
             "",    # Default roster (Y)
             "",    # Auto team names (Y)
+            "n",   # No pick trades
             "",    # Default position (1)
             "",    # Default year (2025)
             "Y",   # Confirm
@@ -537,6 +539,7 @@ class TestNewDraftFlow:
             "",    # Default scoring (half_ppr)
             "",    # Default roster (Y)
             "",    # Auto team names (Y)
+            "n",   # No pick trades
             "",    # Default position (1)
             "",    # Default year (2025)
             "Y",   # Confirm
@@ -547,6 +550,25 @@ class TestNewDraftFlow:
         assert result["action"] == "new"
         assert result["draft_mode"] == "manual_tracker"
 
+    def test_new_draft_with_defaults_has_pick_trades_key(self):
+        """config dict always contains pick_trades key."""
+        responses = [
+            "1",   # New Draft
+            "",    # Default draft mode
+            "",    # Default league size
+            "",    # Default scoring
+            "",    # Default roster
+            "",    # Auto team names
+            "n",   # No pick trades
+            "",    # Default position
+            "",    # Default year
+            "Y",   # Confirm
+        ]
+        wizard, _ = _make_wizard(responses)
+        result = wizard.run()
+        assert "pick_trades" in result
+        assert result["pick_trades"] == []
+
     def test_new_draft_cancel_goes_back(self):
         """Cancelling at confirmation returns to main menu."""
         responses = [
@@ -556,6 +578,7 @@ class TestNewDraftFlow:
             "",    # Default scoring
             "",    # Default roster
             "",    # Auto team names
+            "n",   # No pick trades
             "",    # Default position
             "",    # Default year
             "n",   # Cancel
@@ -565,3 +588,108 @@ class TestNewDraftFlow:
         result = wizard.run()
 
         assert result == {"action": "quit"}
+
+
+# ── Pick trades wizard step ──────────────────────────────────────────
+
+
+class TestConfigurePickTrades:
+    """Tests for SetupWizard._configure_pick_trades()."""
+
+    def test_skipped_returns_empty_list(self):
+        """Entering 'n' skips trades and returns empty list."""
+        wizard, _ = _make_wizard(["n"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert result == []
+
+    def test_default_empty_enters_flow(self):
+        """Pressing Enter (empty) accepts the default 'Y' and enters the trades flow."""
+        wizard, _ = _make_wizard(["", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert result == []  # Entered flow but typed 'done' immediately
+
+    def test_single_trade_entered(self):
+        """User enters one two-way exchange and then 'done'."""
+        # Team 2 (idx 1) gives Rd 1 to Team 4 (idx 3); Team 4 gives Rd 3 to Team 2
+        wizard, _ = _make_wizard(["y", "2 1 4 3", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert len(result) == 2  # one exchange = two trade records
+        assert result[0] == {"from_team_id": 1, "round": 1, "to_team_id": 3}
+        assert result[1] == {"from_team_id": 3, "round": 3, "to_team_id": 1}
+
+    def test_two_exchanges_entered(self):
+        """Two separate exchanges produce four trade records."""
+        # Exchange 1: Team 2 Rd1 ↔ Team 1 Rd3
+        # Exchange 2: Team 3 Rd2 ↔ Team 4 Rd4
+        wizard, _ = _make_wizard(["y", "2 1 1 3", "3 2 4 4", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert len(result) == 4
+
+    def test_invalid_team_number_rejected(self):
+        """Out-of-range team numbers prompt re-entry; entering done gives empty list."""
+        wizard, _ = _make_wizard(["y", "5 1 1 2", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert result == []
+
+    def test_same_team_rejected(self):
+        """A team cannot trade with itself."""
+        wizard, _ = _make_wizard(["y", "2 1 2 3", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert result == []
+
+    def test_invalid_round_number_rejected(self):
+        """Round number out of range prompts re-entry."""
+        wizard, _ = _make_wizard(["y", "1 99 2 1", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert result == []
+
+    def test_team_without_pick_rejected(self):
+        """Trading a pick a team no longer owns is rejected."""
+        # First exchange: Team 2 gives Rd1 to Team 1; Team 1 gives Rd3 to Team 2
+        # Second exchange: Team 2 tries to give Rd1 again (no longer owns it)
+        wizard, _ = _make_wizard(["y", "2 1 1 3", "2 1 3 5", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        # Only the first valid exchange (2 records) should be recorded
+        assert len(result) == 2
+
+    def test_wrong_number_of_parts_rejected(self):
+        """Input with wrong token count is rejected."""
+        wizard, _ = _make_wizard(["y", "1 2 3", "done"])
+        result = wizard._configure_pick_trades(
+            league_size=4,
+            team_names=["Team 1", "Team 2", "Team 3", "Team 4"],
+            total_rounds=15,
+        )
+        assert result == []

@@ -124,34 +124,39 @@ def _make_simulator(
 # ── _get_team_for_pick ────────────────────────────────────────────────
 
 class TestGetTeamForPick:
-    """Snake-draft team assignment sanity checks."""
+    """Snake-draft team assignment sanity checks (2D draft_order)."""
+
+    @staticmethod
+    def _snake_order(n: int, rounds: int):
+        return DraftState._generate_snake_order(n, rounds)
 
     def test_round1_ascending(self):
-        order = list(range(12))
+        order = self._snake_order(12, 15)
         # Round 1: picks 1-12 → team 0, 1, 2, ..., 11
         assert _get_team_for_pick(1, 12, order) == 0
         assert _get_team_for_pick(6, 12, order) == 5
         assert _get_team_for_pick(12, 12, order) == 11
 
     def test_round2_descending(self):
-        order = list(range(12))
+        order = self._snake_order(12, 15)
         # Round 2: picks 13-24 → team 11, 10, ..., 0
         assert _get_team_for_pick(13, 12, order) == 11
         assert _get_team_for_pick(24, 12, order) == 0
 
     def test_round3_ascending(self):
-        order = list(range(12))
+        order = self._snake_order(12, 15)
         assert _get_team_for_pick(25, 12, order) == 0
         assert _get_team_for_pick(36, 12, order) == 11
 
     def test_respects_draft_order(self):
-        # Reversed order: team 11 picks first
-        order = list(range(11, -1, -1))
+        # Build 2D order where round 1 is reversed (team 11 picks first)
+        order = self._snake_order(12, 15)
+        order[0] = list(range(11, -1, -1))  # override round 1
         assert _get_team_for_pick(1, 12, order) == 11
         assert _get_team_for_pick(12, 12, order) == 0
 
     def test_small_league(self):
-        order = list(range(8))
+        order = self._snake_order(8, 15)
         assert _get_team_for_pick(1, 8, order) == 0
         assert _get_team_for_pick(8, 8, order) == 7
         assert _get_team_for_pick(9, 8, order) == 7  # Round 2 starts descending
