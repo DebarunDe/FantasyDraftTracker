@@ -33,6 +33,7 @@ class DraftInitializer:
         human_team_id: int = 0,
         draft_mode: str = "simulation",
         data_year: int = 2025,
+        pick_trades: Optional[List[Dict]] = None,
     ) -> DraftState:
         """
         Create a new draft instance.
@@ -45,6 +46,8 @@ class DraftInitializer:
             human_team_id: Index of human-controlled team (default: 0)
             draft_mode: "simulation" or "manual_tracker"
             data_year: Which season's projections to use
+            pick_trades: List of pre-draft pick trades to apply, each a dict
+                with keys "from_team_id", "round", "to_team_id".
 
         Returns:
             DraftState ready to begin drafting
@@ -71,6 +74,13 @@ class DraftInitializer:
             human_team_id=human_team_id,
             player_data=player_data,
         )
+
+        if pick_trades:
+            self._validate_pick_trades(pick_trades, league_size)
+            for trade in pick_trades:
+                draft_state.apply_pick_trade(
+                    trade["from_team_id"], trade["round"], trade["to_team_id"]
+                )
 
         logger.info(
             "Created draft %s: %d teams, %s scoring, %d players available",
@@ -144,6 +154,38 @@ class DraftInitializer:
 
         logger.info("Loaded %d players for %d season", len(player_data), data_year)
         return player_data
+
+    @staticmethod
+    def _validate_pick_trades(pick_trades: List[Dict], league_size: int) -> None:
+        """Validate pick trade dicts before applying them to a draft.
+
+        Args:
+            pick_trades: List of trade dicts, each with keys
+                ``from_team_id``, ``round``, and ``to_team_id``.
+            league_size: Number of teams (valid team IDs are 0..league_size-1).
+
+        Raises:
+            ValueError: If any trade dict is malformed or contains out-of-range IDs.
+        """
+        required_keys = {"from_team_id", "round", "to_team_id"}
+        for i, trade in enumerate(pick_trades):
+            missing = required_keys - set(trade.keys())
+            if missing:
+                raise ValueError(
+                    f"Trade #{i} is missing required keys: {missing}"
+                )
+            from_id = trade["from_team_id"]
+            to_id = trade["to_team_id"]
+            if not (0 <= from_id < league_size):
+                raise ValueError(
+                    f"Trade #{i}: from_team_id {from_id} is out of range "
+                    f"[0, {league_size - 1}]"
+                )
+            if not (0 <= to_id < league_size):
+                raise ValueError(
+                    f"Trade #{i}: to_team_id {to_id} is out of range "
+                    f"[0, {league_size - 1}]"
+                )
 
     @staticmethod
     def get_default_roster_slots() -> Dict[str, int]:

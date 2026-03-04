@@ -27,8 +27,8 @@ class SetupWizard:
 
         Returns one of:
             {"action": "new", "league_size": int, "scoring_format": str,
-             "roster_slots": dict, "team_names": list, "human_team_id": int,
-             "data_year": int}
+             "roster_slots": dict, "team_names": list, "pick_trades": list,
+             "human_team_id": int, "data_year": int}
             {"action": "resume", "draft_state": DraftState}
             {"action": "quit"}
         """
@@ -83,11 +83,12 @@ class SetupWizard:
         scoring_format = self._configure_scoring_format()
         roster_slots = self._configure_roster_slots()
         team_names = self._configure_team_names(league_size)
+        total_rounds = sum(roster_slots.values())
+        pick_trades = self._configure_pick_trades(league_size, team_names, total_rounds)
         human_team_id = self._configure_draft_position(league_size)
         data_year = self._configure_data_year()
 
         # Show confirmation
-        total_rounds = sum(roster_slots.values())
         total_picks = league_size * total_rounds
         scoring_name = SCORING_DISPLAY_NAMES.get(scoring_format, scoring_format)
         mode_display = (
@@ -108,6 +109,13 @@ class SetupWizard:
             f"  Total Picks: {total_picks}\n"
             f"  Data Year: {data_year}"
         )
+        if pick_trades:
+            trades_str = "\n".join(
+                f"    Rd {t['round']}: {team_names[t['from_team_id']]} → "
+                f"{team_names[t['to_team_id']]}"
+                for t in pick_trades
+            )
+            body += f"\n  Traded Picks ({len(pick_trades)}):\n{trades_str}"
         self.console.print(Panel(body, title="Draft Configuration", border_style="green"))
 
         confirm = self.console.input("Start draft? [Y/n]: ").strip().lower()
@@ -119,6 +127,7 @@ class SetupWizard:
                 "scoring_format": scoring_format,
                 "roster_slots": roster_slots,
                 "team_names": team_names,
+                "pick_trades": pick_trades,
                 "human_team_id": human_team_id,
                 "data_year": data_year,
             }
@@ -228,6 +237,145 @@ class SetupWizard:
             name = self.console.input(f"    Team {i + 1} name ({default}): ").strip()
             names.append(name if name else default)
         return names
+
+    def _configure_pick_trades(
+        self, league_size: int, team_names: List[str], total_rounds: int
+    ) -> List[Dict]:
+        """Prompt user to enter any pre-draft pick trades.
+
+        Returns a list of trade dicts: {"from_team_id": int, "round": int, "to_team_id": int}.
+        Team numbers shown to the user are 1-indexed; stored 0-indexed.
+        """
+        raw = self.console.input(
+            "  Configure traded picks? [Y/n]: "
+        ).strip().lower()
+        if raw not in ("", "y", "yes"):
+            return []
+
+        # Build a working copy of the snake order so we can validate each
+        # trade as it is entered and show the updated order.
+        from src.draft_manager.draft_state import DraftState
+        working_order = DraftState._generate_snake_order(league_size, total_rounds)
+
+        trades: List[Dict] = []
+
+        self.console.print()
+        self._show_pick_order(working_order, team_names)
+        self.console.print()
+        self.console.print(
+            "  Enter trades as: [bold]<teamA#> <roundA#> <teamB#> <roundB#>[/bold]"
+        )
+        self.console.print(
+            "    Team A gives their Rd A pick; Team B gives their Rd B pick back."
+        )
+        self.console.print(
+            "    Example: [dim]2 1 4 3[/dim]  "
+            "(Team 2 gives Rd 1 to Team 4; Team 4 gives Rd 3 to Team 2)"
+        )
+        self.console.print("  Type [bold]done[/bold] when finished.")
+        self.console.print()
+
+        while True:
+            raw = self.console.input("  > ").strip().lower()
+            if raw in ("done", "d"):
+                break
+            if raw == "":
+                continue
+
+            parts = raw.split()
+            if len(parts) != 4:
+                self.console.print(
+                    "[red]  Enter exactly four numbers: "
+                    "<teamA#> <roundA#> <teamB#> <roundB#>[/red]"
+                )
+                continue
+
+            try:
+                a_disp, rnd_a, b_disp, rnd_b = (
+                    int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+                )
+            except ValueError:
+                self.console.print("[red]  All four values must be integers.[/red]")
+                continue
+
+            if not (1 <= a_disp <= league_size):
+                self.console.print(f"[red]  teamA# must be 1–{league_size}.[/red]")
+                continue
+            if not (1 <= b_disp <= league_size):
+                self.console.print(f"[red]  teamB# must be 1–{league_size}.[/red]")
+                continue
+            if a_disp == b_disp:
+                self.console.print("[red]  Teams must be different.[/red]")
+                continue
+            if not (1 <= rnd_a <= total_rounds):
+                self.console.print(f"[red]  roundA# must be 1–{total_rounds}.[/red]")
+                continue
+            if not (1 <= rnd_b <= total_rounds):
+                self.console.print(f"[red]  roundB# must be 1–{total_rounds}.[/red]")
+                continue
+
+            a_id = a_disp - 1
+            b_id = b_disp - 1
+
+            # Validate both teams own their respective picks.
+            slots_a = working_order[rnd_a - 1]
+            slots_b = working_order[rnd_b - 1]
+            if a_id not in slots_a:
+                self.console.print(
+                    f"[red]  {team_names[a_id]} does not have a pick in Round {rnd_a}.[/red]"
+                )
+                continue
+            if b_id not in slots_b:
+                self.console.print(
+                    f"[red]  {team_names[b_id]} does not have a pick in Round {rnd_b}.[/red]"
+                )
+                continue
+
+            # Apply both halves atomically.
+            slots_a[slots_a.index(a_id)] = b_id
+            slots_b[slots_b.index(b_id)] = a_id
+            trades.append({"from_team_id": a_id, "round": rnd_a, "to_team_id": b_id})
+            trades.append({"from_team_id": b_id, "round": rnd_b, "to_team_id": a_id})
+
+            self.console.print(
+                f"  [green]✓[/green] {team_names[a_id]}'s Rd {rnd_a} ↔ "
+                f"{team_names[b_id]}'s Rd {rnd_b}"
+            )
+            self.console.print()
+            self._show_pick_order(working_order, team_names)
+            self.console.print()
+            self.console.print(
+                "  Enter trades as: [bold]<teamA#> <roundA#> <teamB#> <roundB#>[/bold]"
+            )
+            self.console.print(
+                "    Team A gives their Rd A pick; Team B gives their Rd B pick back."
+            )
+            self.console.print(
+                "    Example: [dim]2 1 4 3[/dim]  "
+                "(Team 2 gives Rd 1 to Team 4; Team 4 gives Rd 3 to Team 2)"
+            )
+            self.console.print("  Type [bold]done[/bold] when finished.")
+            self.console.print()
+
+        return trades
+
+    def _show_pick_order(
+        self,
+        draft_order: List[List[int]],
+        team_names: List[str],
+        highlight_round: Optional[int] = None,
+    ) -> None:
+        """Print a compact draft order table (one row per round)."""
+        self.console.print("  [bold]Draft pick order:[/bold]")
+        for rnd_idx, slots in enumerate(draft_order):
+            rnd_num = rnd_idx + 1
+            direction = "→" if rnd_num % 2 == 1 else "←"
+            names = ", ".join(team_names[tid] for tid in slots)
+            line = f"    Rd {rnd_num:2d} ({direction}): {names}"
+            if rnd_num == highlight_round:
+                self.console.print(f"[bold yellow]{line}[/bold yellow]")
+            else:
+                self.console.print(line)
 
     def _configure_draft_position(self, league_size: int) -> int:
         """Prompt for human team draft position (1-based to user)."""

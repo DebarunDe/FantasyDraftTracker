@@ -183,6 +183,7 @@ class StatePersistence:
             "current_round": state.current_round,
             "current_team_id": state.current_team_id,
             "draft_order": state.draft_order,
+            "pick_trades": state.pick_trades,
             "teams": [
                 {
                     "team_id": team.team_id,
@@ -246,6 +247,24 @@ class StatePersistence:
             for pd in data["all_picks"]
         ]
 
+        raw_order = data["draft_order"]
+        # Backwards compatibility: old saves stored a flat 1D list of the form
+        # [0, 1, 2, ..., N-1] — i.e. simply list(range(league_size)) with no
+        # trade mutations and no round information.  Regenerating the full 2D
+        # snake order from scratch is therefore correct and lossless: the 1D
+        # list conveyed no information beyond what _generate_snake_order() would
+        # produce anyway, so nothing is discarded.
+        if raw_order and not isinstance(raw_order[0], list):
+            logger.warning(
+                "Draft %s has old 1D draft_order format; "
+                "converting to 2D snake order",
+                data["draft_id"],
+            )
+            raw_order = DraftState._generate_snake_order(
+                lc["league_size"],
+                sum(lc["roster_slots"].values()),
+            )
+
         return DraftState(
             draft_id=data["draft_id"],
             league_config=league_config,
@@ -253,11 +272,12 @@ class StatePersistence:
             current_pick=data["current_pick"],
             current_round=data["current_round"],
             current_team_id=data["current_team_id"],
-            draft_order=data["draft_order"],
+            draft_order=raw_order,
             teams=teams,
             all_picks=all_picks,
             available_players=data["available_players"],
             player_data=data["player_data"],
+            pick_trades=data.get("pick_trades", []),
             is_complete=data.get("is_complete", False),
             completed_at=data.get("completed_at"),
         )
