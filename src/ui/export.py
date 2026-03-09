@@ -59,7 +59,7 @@ class DraftExporter:
                 pick_in_round = ((pick.pick_number - 1) % league_size) + 1
                 proj = info.get("projections", {}).get(scoring_format, 0)
                 adp = info.get("overall_rank")
-                delta = pick.pick_number - adp if adp is not None else 0
+                delta = pick.pick_number - adp if adp is not None else None
                 label = reach_label(delta) if adp is not None else ""
                 writer.writerow(
                     [
