@@ -16,6 +16,7 @@ from src.simulation_engine.config import (
     POSITION_HARD_CAPS,
     POSITION_SCARCITY_WEIGHTS,
     POSITION_UNCERTAINTY,
+    QB_STREAMING_DISCOUNT,
     ROSTER_EXCESS_PENALTY,
     ROSTER_FILLED_PENALTY,
     ROSTER_NEED_WEIGHT,
@@ -157,6 +158,13 @@ class DynamicVORCalculator:
             else:
                 # Skill positions: dynamic_vor = base_vor * scarcity * need * uncertainty * tier_urgency
                 dynamic_vor = base_vor * scarcity * need * uncertainty_adj * tier_urgency
+
+                # QB streaming discount (single-QB leagues, BEER+ methodology):
+                # QBs are the most streamable position — viable waiver QBs score ~250-270 FPTS,
+                # making the elite-QB premium only ~1 PPG over a mid-tier streamer.
+                # Applied after all other multipliers so every component remains interpretable.
+                if position == "QB":
+                    dynamic_vor *= QB_STREAMING_DISCOUNT
 
                 # Hard cap: apply position-specific max total players
                 hard_cap = POSITION_HARD_CAPS.get(position)

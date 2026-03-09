@@ -8,6 +8,7 @@ from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.simulation_engine.config import (
     NEED_NORMALIZATION,
     POSITION_SCARCITY_WEIGHTS,
+    QB_STREAMING_DISCOUNT,
     ROSTER_EXCESS_PENALTY,
     ROSTER_FILLED_PENALTY,
     ROSTER_NEED_WEIGHT,
@@ -475,8 +476,9 @@ class TestCalculateDynamicVOR:
         expected_need = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
         assert r.need_multiplier == pytest.approx(expected_need)
         # Mid-round: uncertainty_adj = 1.0; single player → tier_urgency = 1.0 (no gap)
-        # dynamic_vor = base * scarcity * need * uncertainty_adj * tier_urgency
-        expected = 40.0 * 1.0 * expected_need * 1.0 * 1.0
+        # QB also gets QB_STREAMING_DISCOUNT applied (1-QB league streaming adjustment)
+        # dynamic_vor = base * scarcity * need * uncertainty_adj * tier_urgency * QB_STREAMING_DISCOUNT
+        expected = 40.0 * 1.0 * expected_need * 1.0 * 1.0 * QB_STREAMING_DISCOUNT
         assert r.dynamic_vor == pytest.approx(expected)
 
     def test_scarcity_boosts_positions_with_more_drafted(self):
@@ -875,6 +877,9 @@ class TestFormulaVerification:
                     * uncertainty_adj
                     * tier_urgency
                 )
+                # QB also gets streaming discount applied (1-QB league BEER+ adjustment)
+                if vor.position == "QB":
+                    expected *= QB_STREAMING_DISCOUNT
 
             assert vor.dynamic_vor == pytest.approx(expected, rel=1e-4)
 
