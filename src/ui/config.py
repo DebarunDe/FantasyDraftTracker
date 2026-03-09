@@ -53,3 +53,17 @@ COMMANDS = {
     "comp",
     "export",
 }
+
+
+def reach_label(delta: int) -> str:
+    """Return a plain-text reach/steal label for a given pick delta.
+
+    delta = pick_number - overall_rank  (positive = steal, negative = reach)
+    """
+    if delta >= STEAL_STRONG_THRESHOLD:
+        return "STEAL"
+    if delta >= REACH_STEAL_LABEL_THRESHOLD:
+        return "Value"
+    if delta <= -REACH_STEAL_LABEL_THRESHOLD:
+        return "REACH"
+    return ""
