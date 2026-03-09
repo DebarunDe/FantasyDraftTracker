@@ -77,9 +77,7 @@ class PickRecommender:
         if team_id is None:
             team_id = draft_state.current_team_id
 
-        vor_results = self.vor_calculator.calculate_from_draft_state(
-            draft_state, team_id
-        )
+        vor_results = self.vor_calculator.calculate_from_draft_state(draft_state, team_id)
 
         available_ids = {p["player_id"] for p in available_players}
         all_sorted_vor = sorted(
@@ -98,13 +96,9 @@ class PickRecommender:
             # Limit to top candidates by VOR so we only simulate the picks
             # that could plausibly be recommended.
             candidate_ids = {v.player_id for v in all_sorted_vor[:CANDIDATE_POOL_SIZE]}
-            candidates_for_mc = [
-                p for p in candidate_pool if p["player_id"] in candidate_ids
-            ]
+            candidates_for_mc = [p for p in candidate_pool if p["player_id"] in candidate_ids]
             if candidates_for_mc:
-                mc_scores = self.mc_simulator.evaluate_candidates(
-                    draft_state, candidates_for_mc
-                )
+                mc_scores = self.mc_simulator.evaluate_candidates(draft_state, candidates_for_mc)
                 logger.debug(
                     "MC evaluated %d candidates (top MC: %.1f pts)",
                     len(mc_scores),
@@ -338,9 +332,7 @@ class PickRecommender:
                 counts[pos] = counts.get(pos, 0) + 1
         return counts
 
-    def _count_team_at_position(
-        self, team, position: str, player_data: Dict
-    ) -> int:
+    def _count_team_at_position(self, team, position: str, player_data: Dict) -> int:
         """Return how many players the team has drafted at *position*."""
         count = 0
         for pid in team.picks:

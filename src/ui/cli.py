@@ -89,8 +89,7 @@ class DraftApp:
         self.draft_state = draft_state
         self._init_components()
         self.display.show_success(
-            f"Resumed draft at Round {draft_state.current_round}, "
-            f"Pick {draft_state.current_pick}"
+            f"Resumed draft at Round {draft_state.current_round}, Pick {draft_state.current_pick}"
         )
 
     def _init_components(self) -> None:
@@ -162,9 +161,7 @@ class DraftApp:
         Returns True if a pick was made, False if no legal pick was available.
         """
         current_team = self.draft_state.get_current_team()
-        self.console.print(
-            f"\n[dim]  {current_team.team_name} is on the clock...[/dim]"
-        )
+        self.console.print(f"\n[dim]  {current_team.team_name} is on the clock...[/dim]")
 
         available = self.controller.get_available_players()
 
@@ -172,19 +169,14 @@ class DraftApp:
         # The VOR scores may rank a player highly even when that position slot is full.
         rules = DraftRules(self.draft_state)
         legal = [
-            p for p in available
-            if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+            p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
         ]
 
         if not legal:
-            logger.warning(
-                "No legal picks for %s — roster may be full", current_team.team_name
-            )
+            logger.warning("No legal picks for %s — roster may be full", current_team.team_name)
             return False
 
-        player_id = self.computer_drafter.make_pick(
-            self.draft_state, legal, current_team.team_id
-        )
+        player_id = self.computer_drafter.make_pick(self.draft_state, legal, current_team.team_id)
         self._execute_pick(player_id)
         return True
 
@@ -245,8 +237,7 @@ class DraftApp:
             if parsed["type"] == "number":
                 if not self.last_displayed_players:
                     self.display.show_error(
-                        "No player list displayed yet. "
-                        "Use [a]vailable or [rec] first."
+                        "No player list displayed yet. Use [a]vailable or [rec] first."
                     )
                     continue
                 player = self.searcher.resolve_by_number(
@@ -266,9 +257,7 @@ class DraftApp:
             # Name search
             results = self.searcher.search(parsed["query"])
             if not results:
-                self.display.show_error(
-                    f"No available players matching '{parsed['query']}'"
-                )
+                self.display.show_error(f"No available players matching '{parsed['query']}'")
                 continue
 
             if len(results) == 1:
@@ -290,9 +279,11 @@ class DraftApp:
         team = player.get("team", "?")
 
         try:
-            raw = self.console.input(
-                f"  Draft [bold]{name}[/bold] ({pos} - {team})? [Y/n]: "
-            ).strip().lower()
+            raw = (
+                self.console.input(f"  Draft [bold]{name}[/bold] ({pos} - {team})? [Y/n]: ")
+                .strip()
+                .lower()
+            )
         except EOFError:
             return None
 
@@ -360,9 +351,7 @@ class DraftApp:
 
         if command in ("sim", "simulate"):
             if self._is_manual_tracker:
-                self.display.show_error(
-                    "'sim' is not available in Manual Tracker mode."
-                )
+                self.display.show_error("'sim' is not available in Manual Tracker mode.")
                 return None
             return self._simulate_rest_of_draft()
 
@@ -384,9 +373,7 @@ class DraftApp:
         the user cancels.
         """
         try:
-            raw = self.console.input(
-                "Simulate all remaining picks? [Y/n]: "
-            ).strip().lower()
+            raw = self.console.input("Simulate all remaining picks? [Y/n]: ").strip().lower()
         except EOFError:
             return None
 
@@ -458,9 +445,7 @@ class DraftApp:
             reverse=True,
         )
 
-        displayed = self.display.show_available_players(
-            players, scoring, limit=limit
-        )
+        displayed = self.display.show_available_players(players, scoring, limit=limit)
         self.last_displayed_players = displayed
 
     def _handle_roster(self, args: str, scoring: str) -> None:
@@ -536,9 +521,7 @@ class DraftApp:
 
         while True:
             try:
-                raw = self.console.input(
-                    "Post-draft > "
-                ).strip().lower()
+                raw = self.console.input("Post-draft > ").strip().lower()
             except EOFError:
                 break
 

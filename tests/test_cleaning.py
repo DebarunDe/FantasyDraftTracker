@@ -5,10 +5,10 @@ Fixtures ``cleaner`` and ``ingester`` are provided by conftest.py.
 
 from src.data_pipeline.cleaning import TEAM_NAME_TO_ABBR
 
-
 # ---------------------------------------------------------------------------
 # Position extraction
 # ---------------------------------------------------------------------------
+
 
 class TestExtractBasePosition:
     def test_wr(self, cleaner):
@@ -66,6 +66,7 @@ class TestExtractPositionRank:
 # Team name standardization
 # ---------------------------------------------------------------------------
 
+
 class TestStandardizeTeamName:
     def test_full_name(self, cleaner):
         assert cleaner.standardize_team_name("Philadelphia Eagles") == "PHI"
@@ -91,6 +92,7 @@ class TestStandardizeTeamName:
 # ---------------------------------------------------------------------------
 # Player name normalization
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizePlayerName:
     def test_basic_name(self, cleaner):
@@ -135,7 +137,7 @@ class TestNormalizePlayerName:
         assert cleaner.normalize_player_name("O\u2018Brien") == "O'Brien"
 
     def test_modifier_apostrophe_normalized(self, cleaner):
-        assert cleaner.normalize_player_name("Ja\u02BCMarr Chase") == "Ja'Marr Chase"
+        assert cleaner.normalize_player_name("Ja\u02bcMarr Chase") == "Ja'Marr Chase"
 
     def test_en_dash_normalized(self, cleaner):
         assert cleaner.normalize_player_name("Amon\u2013Ra St. Brown") == "Amon-Ra St. Brown"
@@ -147,6 +149,7 @@ class TestNormalizePlayerName:
 # ---------------------------------------------------------------------------
 # DataFrame-level cleaning (integration with real data)
 # ---------------------------------------------------------------------------
+
 
 class TestCleanRankings:
     def test_adds_expected_columns(self, cleaner, ingester):

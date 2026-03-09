@@ -136,12 +136,8 @@ class SetupWizard:
     def _configure_draft_mode(self) -> str:
         """Prompt for draft mode: simulation or manual tracker."""
         self.console.print("  Draft Mode:")
-        self.console.print(
-            "    1. Simulation       - AI opponents auto-pick (recommended)"
-        )
-        self.console.print(
-            "    2. Manual Tracker   - Record every pick yourself (for live drafts)"
-        )
+        self.console.print("    1. Simulation       - AI opponents auto-pick (recommended)")
+        self.console.print("    2. Manual Tracker   - Record every pick yourself (for live drafts)")
         while True:
             raw = self.console.input("  Select [1-2] (1): ").strip()
             if raw in ("", "1"):
@@ -163,9 +159,7 @@ class SetupWizard:
                 size = int(raw)
                 if size in VALID_LEAGUE_SIZES:
                     return size
-                self.console.print(
-                    f"[red]  Must be one of: {sizes_str}[/red]"
-                )
+                self.console.print(f"[red]  Must be one of: {sizes_str}[/red]")
             except ValueError:
                 self.console.print("[red]  Please enter a number.[/red]")
 
@@ -181,9 +175,7 @@ class SetupWizard:
             self.console.print(f"    {i}. {name}{rec}")
 
         while True:
-            raw = self.console.input(
-                f"  Select [1-3] ({default_idx}): "
-            ).strip()
+            raw = self.console.input(f"  Select [1-3] ({default_idx}): ").strip()
             if raw == "":
                 return DEFAULT_SCORING_FORMAT
             try:
@@ -197,9 +189,7 @@ class SetupWizard:
     def _configure_roster_slots(self) -> Dict[str, int]:
         """Prompt for roster configuration."""
         slots_str = " ".join(f"{k}:{v}" for k, v in DEFAULT_ROSTER_SLOTS.items())
-        raw = self.console.input(
-            f"  Use default roster? ({slots_str}) [Y/n]: "
-        ).strip().lower()
+        raw = self.console.input(f"  Use default roster? ({slots_str}) [Y/n]: ").strip().lower()
 
         if raw in ("", "y", "yes"):
             return dict(DEFAULT_ROSTER_SLOTS)
@@ -224,9 +214,7 @@ class SetupWizard:
 
     def _configure_team_names(self, league_size: int) -> List[str]:
         """Prompt for team names."""
-        raw = self.console.input(
-            "  Auto-generate team names? [Y/n]: "
-        ).strip().lower()
+        raw = self.console.input("  Auto-generate team names? [Y/n]: ").strip().lower()
 
         if raw in ("", "y", "yes"):
             return [f"Team {i + 1}" for i in range(league_size)]
@@ -246,15 +234,14 @@ class SetupWizard:
         Returns a list of trade dicts: {"from_team_id": int, "round": int, "to_team_id": int}.
         Team numbers shown to the user are 1-indexed; stored 0-indexed.
         """
-        raw = self.console.input(
-            "  Configure traded picks? [Y/n]: "
-        ).strip().lower()
+        raw = self.console.input("  Configure traded picks? [Y/n]: ").strip().lower()
         if raw not in ("", "y", "yes"):
             return []
 
         # Build a working copy of the snake order so we can validate each
         # trade as it is entered and show the updated order.
         from src.draft_manager.draft_state import DraftState
+
         working_order = DraftState._generate_snake_order(league_size, total_rounds)
 
         trades: List[Dict] = []
@@ -262,12 +249,8 @@ class SetupWizard:
         self.console.print()
         self._show_pick_order(working_order, team_names)
         self.console.print()
-        self.console.print(
-            "  Enter trades as: [bold]<teamA#> <roundA#> <teamB#> <roundB#>[/bold]"
-        )
-        self.console.print(
-            "    Team A gives their Rd A pick; Team B gives their Rd B pick back."
-        )
+        self.console.print("  Enter trades as: [bold]<teamA#> <roundA#> <teamB#> <roundB#>[/bold]")
+        self.console.print("    Team A gives their Rd A pick; Team B gives their Rd B pick back.")
         self.console.print(
             "    Example: [dim]2 1 4 3[/dim]  "
             "(Team 2 gives Rd 1 to Team 4; Team 4 gives Rd 3 to Team 2)"
@@ -285,14 +268,16 @@ class SetupWizard:
             parts = raw.split()
             if len(parts) != 4:
                 self.console.print(
-                    "[red]  Enter exactly four numbers: "
-                    "<teamA#> <roundA#> <teamB#> <roundB#>[/red]"
+                    "[red]  Enter exactly four numbers: <teamA#> <roundA#> <teamB#> <roundB#>[/red]"
                 )
                 continue
 
             try:
                 a_disp, rnd_a, b_disp, rnd_b = (
-                    int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+                    int(parts[0]),
+                    int(parts[1]),
+                    int(parts[2]),
+                    int(parts[3]),
                 )
             except ValueError:
                 self.console.print("[red]  All four values must be integers.[/red]")
@@ -380,18 +365,14 @@ class SetupWizard:
     def _configure_draft_position(self, league_size: int) -> int:
         """Prompt for human team draft position (1-based to user)."""
         while True:
-            raw = self.console.input(
-                f"  Your draft position [1-{league_size}] (1): "
-            ).strip()
+            raw = self.console.input(f"  Your draft position [1-{league_size}] (1): ").strip()
             if raw == "":
                 return 0
             try:
                 pos = int(raw)
                 if 1 <= pos <= league_size:
                     return pos - 1  # Convert to 0-based
-                self.console.print(
-                    f"[red]  Must be between 1 and {league_size}.[/red]"
-                )
+                self.console.print(f"[red]  Must be between 1 and {league_size}.[/red]")
             except ValueError:
                 self.console.print("[red]  Please enter a number.[/red]")
 
@@ -454,9 +435,7 @@ class SetupWizard:
             self.console.print("[yellow]  No saved drafts found.[/yellow]")
             return None
 
-        self.console.print(
-            "[dim]  Enter # to resume, d # to delete, or 'back'[/dim]"
-        )
+        self.console.print("[dim]  Enter # to resume, d # to delete, or 'back'[/dim]")
 
         while True:
             raw = self.console.input("  > ").strip()
@@ -476,13 +455,9 @@ class SetupWizard:
                             # Refresh the menu after deletion
                             return self._show_resume_menu()
                         continue
-                    self.console.print(
-                        f"[red]  Enter a number between 1 and {len(ordered)}.[/red]"
-                    )
+                    self.console.print(f"[red]  Enter a number between 1 and {len(ordered)}.[/red]")
                 except ValueError:
-                    self.console.print(
-                        "[red]  Use 'd <number>' to delete a draft.[/red]"
-                    )
+                    self.console.print("[red]  Use 'd <number>' to delete a draft.[/red]")
                 continue
 
             try:
@@ -494,21 +469,16 @@ class SetupWizard:
                         self.console.print("[red]  Failed to load draft.[/red]")
                         continue
                     return {"action": "resume", "draft_state": draft_state}
-                self.console.print(
-                    f"[red]  Enter a number between 1 and {len(ordered)}.[/red]"
-                )
+                self.console.print(f"[red]  Enter a number between 1 and {len(ordered)}.[/red]")
             except ValueError:
-                self.console.print(
-                    "[red]  Enter a number, 'd <number>', or 'back'.[/red]"
-                )
+                self.console.print("[red]  Enter a number, 'd <number>', or 'back'.[/red]")
 
     def _confirm_delete(self, draft: Dict) -> bool:
         """Prompt for delete confirmation and execute if confirmed."""
         draft_id_short = draft["draft_id"][:8] + "..."
         status = "completed" if draft["is_complete"] else "in progress"
         self.console.print(
-            f"[yellow]  Delete draft {draft_id_short} ({status})? "
-            f"This cannot be undone.[/yellow]"
+            f"[yellow]  Delete draft {draft_id_short} ({status})? This cannot be undone.[/yellow]"
         )
         confirm = self.console.input("  Confirm delete? \\[y/N]: ").strip().lower()
         if confirm in ("y", "yes"):

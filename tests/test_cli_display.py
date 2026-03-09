@@ -2,12 +2,10 @@
 
 from io import StringIO
 
-import pytest
 from rich.console import Console
 
 from src.draft_manager.draft_state import DraftState, LeagueConfig, Pick
 from src.ui.display import DraftDisplay
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -28,8 +26,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -186,9 +190,7 @@ class TestShowRecentPicks:
         state = _make_draft_state()
         pick = Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB")
 
-        display.show_recent_picks(
-            [pick], state.player_data, state.teams
-        )
+        display.show_recent_picks([pick], state.player_data, state.teams)
         text = output.getvalue()
 
         assert "Josh Allen" in text
@@ -274,7 +276,16 @@ class TestShowTeamRoster:
     def test_shows_empty_slots(self):
         console, output = _make_console()
         display = DraftDisplay(console)
-        roster_slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6}
+        roster_slots = {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
+        }
         roster = {slot: [] for slot in roster_slots}
 
         display.show_team_roster("My Team", roster, "half_ppr", roster_slots)
@@ -287,7 +298,16 @@ class TestShowTeamRoster:
         console, output = _make_console()
         display = DraftDisplay(console)
         player_data = _make_player_data()
-        roster_slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6}
+        roster_slots = {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
+        }
         roster = {slot: [] for slot in roster_slots}
         roster["QB"] = [player_data["qb1"]]
 
@@ -388,8 +408,16 @@ class TestShowDraftSummary:
         display = DraftDisplay(console)
         summary = {
             "teams": [
-                {"team_name": "Low Team", "is_human": False, "projected_points": 1000.0},
-                {"team_name": "High Team", "is_human": True, "projected_points": 2000.0},
+                {
+                    "team_name": "Low Team",
+                    "is_human": False,
+                    "projected_points": 1000.0,
+                },
+                {
+                    "team_name": "High Team",
+                    "is_human": True,
+                    "projected_points": 2000.0,
+                },
             ]
         }
 
@@ -429,20 +457,26 @@ class TestShowVorRecommendations:
 
         vor_results = {
             "qb1": VORResult(
-                player_id="qb1", base_vor=20.0, dynamic_vor=30.0,
-                scarcity_multiplier=1.2, need_multiplier=1.25,
-                position="QB", position_rank=1,
+                player_id="qb1",
+                base_vor=20.0,
+                dynamic_vor=30.0,
+                scarcity_multiplier=1.2,
+                need_multiplier=1.25,
+                position="QB",
+                position_rank=1,
             ),
             "rb1": VORResult(
-                player_id="rb1", base_vor=22.0, dynamic_vor=35.0,
-                scarcity_multiplier=1.5, need_multiplier=1.1,
-                position="RB", position_rank=1,
+                player_id="rb1",
+                base_vor=22.0,
+                dynamic_vor=35.0,
+                scarcity_multiplier=1.5,
+                need_multiplier=1.1,
+                position="RB",
+                position_rank=1,
             ),
         }
 
-        result = display.show_vor_recommendations(
-            vor_results, player_data, "half_ppr", limit=5
-        )
+        result = display.show_vor_recommendations(vor_results, player_data, "half_ppr", limit=5)
 
         assert len(result) == 2
         # Sorted by dynamic VOR: rb1 (35.0) > qb1 (30.0)
@@ -458,9 +492,13 @@ class TestShowVorRecommendations:
 
         vor_results = {
             "qb1": VORResult(
-                player_id="qb1", base_vor=20.0, dynamic_vor=30.0,
-                scarcity_multiplier=1.0, need_multiplier=1.0,
-                position="QB", position_rank=1,
+                player_id="qb1",
+                base_vor=20.0,
+                dynamic_vor=30.0,
+                scarcity_multiplier=1.0,
+                need_multiplier=1.0,
+                position="QB",
+                position_rank=1,
             ),
         }
 
@@ -508,7 +546,10 @@ class TestShowPickBannerReachSteal:
         display = DraftDisplay(console)
         pick = Pick.create(pick_number=1, round=1, team_id=0, player_id="qb1", slot="QB")
         player_info = {
-            "name": "Josh Allen", "position": "QB", "team": "BUF", "overall_rank": 5
+            "name": "Josh Allen",
+            "position": "QB",
+            "team": "BUF",
+            "overall_rank": 5,
         }
         display.show_pick_banner(pick, player_info, "My Team")
         text = output.getvalue()
@@ -519,7 +560,10 @@ class TestShowPickBannerReachSteal:
         display = DraftDisplay(console)
         pick = Pick.create(pick_number=50, round=5, team_id=0, player_id="qb1", slot="QB")
         player_info = {
-            "name": "Josh Allen", "position": "QB", "team": "BUF", "overall_rank": 10
+            "name": "Josh Allen",
+            "position": "QB",
+            "team": "BUF",
+            "overall_rank": 10,
         }
         display.show_pick_banner(pick, player_info, "My Team")
         text = output.getvalue()
@@ -530,7 +574,10 @@ class TestShowPickBannerReachSteal:
         display = DraftDisplay(console)
         pick = Pick.create(pick_number=5, round=1, team_id=0, player_id="qb1", slot="QB")
         player_info = {
-            "name": "Josh Allen", "position": "QB", "team": "BUF", "overall_rank": 30
+            "name": "Josh Allen",
+            "position": "QB",
+            "team": "BUF",
+            "overall_rank": 30,
         }
         display.show_pick_banner(pick, player_info, "My Team")
         text = output.getvalue()
@@ -599,7 +646,16 @@ class TestShowFullDraftBoard:
 
 class TestShowTeamComparison:
     def _make_roster_slots(self):
-        return {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6}
+        return {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
+        }
 
     def test_shows_all_teams(self):
         console, output = _make_console()

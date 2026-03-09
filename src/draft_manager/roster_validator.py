@@ -52,8 +52,7 @@ class RosterValidator:
                 )
             elif actual_count > required_count:
                 errors.append(
-                    f"Too many {position} players "
-                    f"(have {actual_count}, max {required_count})"
+                    f"Too many {position} players (have {actual_count}, max {required_count})"
                 )
 
         return (len(errors) == 0, errors)

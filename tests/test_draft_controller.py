@@ -9,7 +9,6 @@ from src.draft_manager.draft_rules import DraftRules, ValidationError
 from src.draft_manager.draft_state import DraftState, LeagueConfig, Pick
 from src.draft_manager.roster_validator import RosterValidator
 
-
 # ── Check data availability ──────────────────────────────────────────
 
 PROCESSED_DIR = Path(__file__).parent.parent / "data" / "processed"
@@ -32,8 +31,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -44,14 +49,38 @@ def _make_player_data():
     """Create a small but sufficient set of players with varied positions."""
     players = {}
     specs = [
-        ("qb1", "QB"), ("qb2", "QB"), ("qb3", "QB"), ("qb4", "QB"),
-        ("rb1", "RB"), ("rb2", "RB"), ("rb3", "RB"), ("rb4", "RB"),
-        ("rb5", "RB"), ("rb6", "RB"), ("rb7", "RB"), ("rb8", "RB"),
-        ("wr1", "WR"), ("wr2", "WR"), ("wr3", "WR"), ("wr4", "WR"),
-        ("wr5", "WR"), ("wr6", "WR"), ("wr7", "WR"), ("wr8", "WR"),
-        ("te1", "TE"), ("te2", "TE"), ("te3", "TE"), ("te4", "TE"),
-        ("k1", "K"), ("k2", "K"), ("k3", "K"), ("k4", "K"),
-        ("dst1", "DST"), ("dst2", "DST"), ("dst3", "DST"), ("dst4", "DST"),
+        ("qb1", "QB"),
+        ("qb2", "QB"),
+        ("qb3", "QB"),
+        ("qb4", "QB"),
+        ("rb1", "RB"),
+        ("rb2", "RB"),
+        ("rb3", "RB"),
+        ("rb4", "RB"),
+        ("rb5", "RB"),
+        ("rb6", "RB"),
+        ("rb7", "RB"),
+        ("rb8", "RB"),
+        ("wr1", "WR"),
+        ("wr2", "WR"),
+        ("wr3", "WR"),
+        ("wr4", "WR"),
+        ("wr5", "WR"),
+        ("wr6", "WR"),
+        ("wr7", "WR"),
+        ("wr8", "WR"),
+        ("te1", "TE"),
+        ("te2", "TE"),
+        ("te3", "TE"),
+        ("te4", "TE"),
+        ("k1", "K"),
+        ("k2", "K"),
+        ("k3", "K"),
+        ("k4", "K"),
+        ("dst1", "DST"),
+        ("dst2", "DST"),
+        ("dst3", "DST"),
+        ("dst4", "DST"),
     ]
     for pid, pos in specs:
         players[pid] = {
@@ -314,8 +343,14 @@ class TestDraftCompletion:
         ctrl, state = _make_controller(
             league_size=2,
             roster_slots={
-                "QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0,
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
             },
         )
         # 2 teams * 1 round = 2 picks total
@@ -329,8 +364,14 @@ class TestDraftCompletion:
         ctrl, state = _make_controller(
             league_size=2,
             roster_slots={
-                "QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0,
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
             },
         )
         ctrl.make_pick(0, "qb1")
@@ -409,8 +450,16 @@ class TestGetDraftablePlayers:
     def test_excludes_position_when_position_and_bench_full(self):
         """Once QB slot AND all FLEX/bench slots are full, no more QBs recommended."""
         ctrl, _ = _make_controller(
-            roster_slots={"QB": 1, "RB": 2, "WR": 2, "TE": 1,
-                          "FLEX": 1, "DST": 1, "K": 1, "BENCH": 0},
+            roster_slots={
+                "QB": 1,
+                "RB": 2,
+                "WR": 2,
+                "TE": 1,
+                "FLEX": 1,
+                "DST": 1,
+                "K": 1,
+                "BENCH": 0,
+            },
         )
         # Fill the QB slot
         ctrl.make_pick(0, "qb1")
@@ -442,8 +491,16 @@ class TestGetDraftablePlayers:
         legality directly by inspecting team roster vs returned players.
         """
         ctrl, _ = _make_controller(
-            roster_slots={"QB": 1, "RB": 2, "WR": 2, "TE": 1,
-                          "FLEX": 1, "DST": 1, "K": 1, "BENCH": 0},
+            roster_slots={
+                "QB": 1,
+                "RB": 2,
+                "WR": 2,
+                "TE": 1,
+                "FLEX": 1,
+                "DST": 1,
+                "K": 1,
+                "BENCH": 0,
+            },
         )
         # Directly place a QB on team 0's roster (bypassing turn order)
         # by manipulating the team roster as get_draftable_players would see it.
@@ -489,8 +546,14 @@ class TestGetDraftSummary:
         ctrl, state = _make_controller(
             league_size=2,
             roster_slots={
-                "QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0,
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
             },
         )
         ctrl.make_pick(0, "qb1")
@@ -504,8 +567,14 @@ class TestGetDraftSummary:
         ctrl, _ = _make_controller(
             league_size=2,
             roster_slots={
-                "QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                "FLEX": 0, "DST": 0, "K": 0, "BENCH": 1,
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 1,
             },
         )
         # Round 1: Team 0 gets qb1 (QB starter), Team 1 gets qb2 (QB starter)
@@ -532,8 +601,11 @@ class TestPickSlotField:
     def test_pick_create_with_slot(self):
         """Pick.create() accepts slot parameter."""
         pick = Pick.create(
-            pick_number=1, round=1, team_id=0,
-            player_id="p1", slot="FLEX",
+            pick_number=1,
+            round=1,
+            team_id=0,
+            player_id="p1",
+            slot="FLEX",
         )
         assert pick.slot == "FLEX"
 
@@ -545,8 +617,11 @@ class TestPickSlotField:
     def test_pick_constructor_without_slot_defaults_none(self):
         """Backward compatibility: direct constructor still works."""
         pick = Pick(
-            pick_number=1, round=1, team_id=0,
-            player_id="p1", timestamp="2025-01-01",
+            pick_number=1,
+            round=1,
+            team_id=0,
+            player_id="p1",
+            timestamp="2025-01-01",
         )
         assert pick.slot is None
 

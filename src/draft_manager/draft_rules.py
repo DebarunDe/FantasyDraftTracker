@@ -17,9 +17,7 @@ class DraftRules:
     def __init__(self, draft_state: DraftState):
         self.draft_state = draft_state
 
-    def validate_pick(
-        self, team_id: int, player_id: str
-    ) -> Tuple[bool, Optional[str]]:
+    def validate_pick(self, team_id: int, player_id: str) -> Tuple[bool, Optional[str]]:
         """
         Validate if a pick is legal.
 
@@ -31,8 +29,7 @@ class DraftRules:
             if team_id != self.draft_state.current_team_id:
                 return (
                     False,
-                    f"Not team {team_id}'s turn "
-                    f"(current: {self.draft_state.current_team_id})",
+                    f"Not team {team_id}'s turn (current: {self.draft_state.current_team_id})",
                 )
 
         # Check 2: Does player exist in data?
@@ -59,6 +56,13 @@ class DraftRules:
 
         return True, None
 
+    # RB/WR/TE can spill into FLEX slots, then bench
+    _FLEX_ELIGIBLE = frozenset(("RB", "WR", "TE"))
+
+    def _position_has_any_slot(self, position: str, roster_slots: dict) -> bool:
+        """Return True if this league has at least one slot that can hold the position."""
+        return roster_slots.get(position, 0) > 0 or position in self._FLEX_ELIGIBLE
+
     def _validate_position_limit(
         self, team: TeamRoster, position: str
     ) -> Tuple[bool, Optional[str]]:
@@ -66,8 +70,18 @@ class DraftRules:
         Check if team can draft another player at this position.
 
         Priority: specific position slot -> FLEX slot -> BENCH slot.
+
+        A position is fully excluded from the league (cannot go to bench either)
+        when it has 0 dedicated slots AND is not FLEX-eligible.  This covers K, DST,
+        QB, and any custom position that the league has opted out of.
+        FLEX-eligible positions (RB, WR, TE) can still reach bench via FLEX even
+        when their dedicated slot count is 0.
         """
         roster_slots = self.draft_state.league_config.roster_slots
+
+        # Position excluded from this league entirely — no slot can hold it
+        if not self._position_has_any_slot(position, roster_slots):
+            return False, f"No {position} slots in this league — position is excluded"
 
         current_count = team.get_roster_count(position)
         position_limit = roster_slots.get(position, 0)
@@ -76,7 +90,7 @@ class DraftRules:
             return True, None
 
         # Check FLEX eligibility (RB/WR/TE can fill FLEX)
-        if position in ("RB", "WR", "TE"):
+        if position in self._FLEX_ELIGIBLE:
             flex_count = team.get_roster_count("FLEX")
             flex_limit = roster_slots.get("FLEX", 0)
             if flex_count < flex_limit:

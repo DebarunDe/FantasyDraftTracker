@@ -93,34 +93,17 @@ class DraftController:
     def get_draftable_players(self, team_id: int) -> List[Dict]:
         """Get available players that *team_id* can legally draft.
 
-        Filters by position limits, FLEX eligibility, and bench capacity —
-        the same rules enforced by ``make_pick``.  Use this instead of
-        ``get_available_players`` when building recommendation lists, so the
-        recommender only considers picks the team can actually make.
+        Delegates to DraftRules._validate_position_limit so the filter is
+        always in sync with pick validation — including league-level exclusions
+        (e.g. K/DST with 0 slots) and team-specific roster fullness.
         """
+        rules = DraftRules(self.draft_state)
         team = self.draft_state.get_team(team_id)
-        roster_slots = self.draft_state.league_config.roster_slots
-        flex_eligible = {"RB", "WR", "TE"}
-        bench_limit = roster_slots.get("BENCH", 0)
-        bench_count = team.get_roster_count("BENCH")
-
         players = []
         for pid in self.draft_state.available_players:
             info = self.draft_state.get_player_info(pid)
             pos = info.get("position", "")
-            if not pos:
-                continue
-            pos_count = team.get_roster_count(pos)
-            pos_limit = roster_slots.get(pos, 0)
-            if pos_count < pos_limit:
-                players.append(info)
-            elif pos in flex_eligible:
-                flex_count = team.get_roster_count("FLEX")
-                if flex_count < roster_slots.get("FLEX", 0):
-                    players.append(info)
-                elif bench_count < bench_limit:
-                    players.append(info)
-            elif bench_count < bench_limit:
+            if pos and rules._validate_position_limit(team, pos)[0]:
                 players.append(info)
         return players
 
@@ -150,9 +133,7 @@ class DraftController:
         team = self.draft_state.get_team(team_id)
         formatted = {}
         for slot, player_ids in team.roster.items():
-            formatted[slot] = [
-                self.draft_state.get_player_info(pid) for pid in player_ids
-            ]
+            formatted[slot] = [self.draft_state.get_player_info(pid) for pid in player_ids]
         return formatted
 
     def get_draft_summary(self) -> Dict:
@@ -184,9 +165,7 @@ class DraftController:
 
         return summary
 
-    def _calculate_team_points(
-        self, team: TeamRoster, scoring_format: str
-    ) -> float:
+    def _calculate_team_points(self, team: TeamRoster, scoring_format: str) -> float:
         """Calculate total projected points for starting lineup (excludes bench)."""
         total_points = 0.0
 

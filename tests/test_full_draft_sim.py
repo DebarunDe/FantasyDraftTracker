@@ -1,10 +1,11 @@
 """Simulate a full draft using DynamicVORCalculator recommendations."""
 
 import json
-from src.simulation_engine.vor_calculator import DynamicVORCalculator
-from src.draft_manager.draft_state import DraftState, LeagueConfig
+
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_rules import ValidationError
+from src.draft_manager.draft_state import DraftState, LeagueConfig
+from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
 
 def run_simulation(league_size=12, scoring_format="half_ppr"):
@@ -14,8 +15,14 @@ def run_simulation(league_size=12, scoring_format="half_ppr"):
     player_data = {p["player_id"]: p for p in data["players"]}
 
     roster_slots = {
-        "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-        "FLEX": 1, "K": 1, "DST": 1, "BENCH": 6,
+        "QB": 1,
+        "RB": 2,
+        "WR": 2,
+        "TE": 1,
+        "FLEX": 1,
+        "K": 1,
+        "DST": 1,
+        "BENCH": 6,
     }
 
     config = LeagueConfig(
@@ -55,11 +62,16 @@ def run_simulation(league_size=12, scoring_format="half_ppr"):
             player_info = state.get_player_info(candidate.player_id)
             try:
                 controller.make_pick(team_id, candidate.player_id)
-                draft_log.append((
-                    pick_num, current_round, team_id,
-                    player_info["name"], player_info["position"],
-                    candidate.dynamic_vor,
-                ))
+                draft_log.append(
+                    (
+                        pick_num,
+                        current_round,
+                        team_id,
+                        player_info["name"],
+                        player_info["position"],
+                        candidate.dynamic_vor,
+                    )
+                )
                 break
             except ValidationError:
                 continue
@@ -68,23 +80,33 @@ def run_simulation(league_size=12, scoring_format="half_ppr"):
 
 
 def print_results(draft_log, state, league_size, scoring_format):
-    print(f"\n{'='*120}")
+    print(f"\n{'=' * 120}")
     print(f"FULL DRAFT SIMULATION: {league_size}-team {scoring_format}")
-    print(f"{'='*120}")
+    print(f"{'=' * 120}")
 
     # Show first 4 rounds
     for rnd in range(1, 5):
         picks_in_round = [p for p in draft_log if p[1] == rnd]
         print(f"\n--- Round {rnd} ---")
         for pick_num, _, team_id, name, pos, dvor in picks_in_round:
-            print(f"  Pick {pick_num:>3}: Team {team_id:>2} → {name:<25} ({pos:<3}) VOR: {dvor:.1f}")
+            print(
+                f"  Pick {pick_num:>3}: Team {team_id:>2} → {name:<25} ({pos:<3}) VOR: {dvor:.1f}"
+            )
 
     # Key player tracking
-    print(f"\n--- Key Player Draft Positions ---")
+    print("\n--- Key Player Draft Positions ---")
     key_players = [
-        "Saquon Barkley", "Ja'Marr Chase", "Josh Allen", "Justin Jefferson",
-        "CeeDee Lamb", "Lamar Jackson", "Jalen Hurts", "Travis Kelce",
-        "George Kittle", "Bijan Robinson", "Derrick Henry",
+        "Saquon Barkley",
+        "Ja'Marr Chase",
+        "Josh Allen",
+        "Justin Jefferson",
+        "CeeDee Lamb",
+        "Lamar Jackson",
+        "Jalen Hurts",
+        "Travis Kelce",
+        "George Kittle",
+        "Bijan Robinson",
+        "Derrick Henry",
     ]
     for name in key_players:
         for pick_num, rnd, team_id, pname, pos, dvor in draft_log:
@@ -93,7 +115,7 @@ def print_results(draft_log, state, league_size, scoring_format):
                 break
 
     # Position distribution per round
-    print(f"\n--- Position Distribution by Round ---")
+    print("\n--- Position Distribution by Round ---")
     total_rounds = sum(state.league_config.roster_slots.values())
     for rnd in range(1, min(total_rounds + 1, 16)):
         picks = [p for p in draft_log if p[1] == rnd]
@@ -104,16 +126,20 @@ def print_results(draft_log, state, league_size, scoring_format):
         print(f"  Round {rnd:>2}: {', '.join(parts)}")
 
     # K/DST draft rounds
-    print(f"\n--- K/DST Draft Timing ---")
+    print("\n--- K/DST Draft Timing ---")
     k_rounds = [p[1] for p in draft_log if p[4] == "K"]
     dst_rounds = [p[1] for p in draft_log if p[4] == "DST"]
     if k_rounds:
-        print(f"  K:   rounds {min(k_rounds)}-{max(k_rounds)} (avg {sum(k_rounds)/len(k_rounds):.1f})")
+        print(
+            f"  K:   rounds {min(k_rounds)}-{max(k_rounds)} (avg {sum(k_rounds) / len(k_rounds):.1f})"
+        )
     if dst_rounds:
-        print(f"  DST: rounds {min(dst_rounds)}-{max(dst_rounds)} (avg {sum(dst_rounds)/len(dst_rounds):.1f})")
+        print(
+            f"  DST: rounds {min(dst_rounds)}-{max(dst_rounds)} (avg {sum(dst_rounds) / len(dst_rounds):.1f})"
+        )
 
     # Team roster balance
-    print(f"\n--- Team Roster Summary ---")
+    print("\n--- Team Roster Summary ---")
     max_positions = {}
     for team in state.teams:
         pos_counts = {}
@@ -127,12 +153,12 @@ def print_results(draft_log, state, league_size, scoring_format):
             if pos not in max_positions or cnt > max_positions[pos]:
                 max_positions[pos] = cnt
 
-    print(f"  Max players at any position across all teams:")
+    print("  Max players at any position across all teams:")
     for pos in ["QB", "RB", "WR", "TE", "K", "DST"]:
         print(f"    {pos}: {max_positions.get(pos, 0)}")
 
     # Balance score
-    print(f"\n  Team balance scores (lower = more balanced):")
+    print("\n  Team balance scores (lower = more balanced):")
     for team in state.teams:
         pos_counts = {}
         for slot, pids in team.roster.items():
@@ -143,7 +169,9 @@ def print_results(draft_log, state, league_size, scoring_format):
                     pos_counts[p] = pos_counts.get(p, 0) + 1
         ideal = {"QB": 2, "RB": 5, "WR": 5, "TE": 1, "K": 1, "DST": 1}
         score = sum(abs(pos_counts.get(p, 0) - t) for p, t in ideal.items())
-        counts = " ".join(f"{p}={pos_counts.get(p, 0)}" for p in ["QB", "RB", "WR", "TE", "K", "DST"])
+        counts = " ".join(
+            f"{p}={pos_counts.get(p, 0)}" for p in ["QB", "RB", "WR", "TE", "K", "DST"]
+        )
         print(f"    Team {team.team_id:>2}: score={score}  {counts}")
 
 

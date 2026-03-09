@@ -13,21 +13,26 @@ Tests cover:
   - Recommendation dataclass fields populated correctly
 """
 
-from typing import Dict, List
+from typing import Dict
 
 import pytest
 
-from src.draft_manager.draft_state import DraftState, LeagueConfig, TeamRoster
+from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.simulation_engine.models import Recommendation
 from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
-
 # ── Fixtures & helpers ────────────────────────────────────────────────
 
 STANDARD_ROSTER = {
-    "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-    "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+    "QB": 1,
+    "RB": 2,
+    "WR": 2,
+    "TE": 1,
+    "FLEX": 1,
+    "DST": 1,
+    "K": 1,
+    "BENCH": 6,
 }
 
 
@@ -43,8 +48,12 @@ def _make_player_pool(
     players: Dict[str, Dict] = {}
     rank = 1
     for pos, count in [
-        ("QB", n_qb), ("RB", n_rb), ("WR", n_wr),
-        ("TE", n_te), ("K", n_k), ("DST", n_dst),
+        ("QB", n_qb),
+        ("RB", n_rb),
+        ("WR", n_wr),
+        ("TE", n_te),
+        ("K", n_k),
+        ("DST", n_dst),
     ]:
         for i in range(1, count + 1):
             pid = f"{pos.lower()}{i}"
@@ -114,6 +123,7 @@ def _make_recommender(
 
 # ── TestRecommendPicksBasics ──────────────────────────────────────────
 
+
 class TestRecommendPicksBasics:
     """Basic contract: return type, count, sorting."""
 
@@ -165,6 +175,7 @@ class TestRecommendPicksBasics:
 
 # ── TestRecommendationFields ──────────────────────────────────────────
 
+
 class TestRecommendationFields:
     """Each Recommendation has all required fields populated."""
 
@@ -206,6 +217,7 @@ class TestRecommendationFields:
 
 # ── TestTeamIdBehavior ────────────────────────────────────────────────
 
+
 class TestTeamIdBehavior:
     """team_id defaults and overrides work correctly."""
 
@@ -231,6 +243,7 @@ class TestTeamIdBehavior:
 
 # ── TestReasoningContent ──────────────────────────────────────────────
 
+
 class TestReasoningContent:
     """Reasoning strings reflect meaningful draft context."""
 
@@ -251,7 +264,11 @@ class TestReasoningContent:
         results = rec.recommend_picks(state, available, num_recommendations=1)
         assert results, "Expected at least one recommendation"
         top = results[0]
-        assert "QB" in top.reasoning or "slot" in top.reasoning.lower() or "empty" in top.reasoning.lower()
+        assert (
+            "QB" in top.reasoning
+            or "slot" in top.reasoning.lower()
+            or "empty" in top.reasoning.lower()
+        )
 
     def test_reasoning_uses_separator_when_multiple_clauses(self):
         """Multi-clause reasoning is joined with ' · '."""
@@ -277,6 +294,7 @@ class TestReasoningContent:
 
 
 # ── TestAvailableFiltering ────────────────────────────────────────────
+
 
 class TestAvailableFiltering:
     """Only players in available_players are recommended."""
@@ -305,6 +323,7 @@ class TestAvailableFiltering:
 
 # ── TestScoringFormats ────────────────────────────────────────────────
 
+
 class TestScoringFormats:
     """Recommender works correctly for all three scoring formats."""
 
@@ -322,6 +341,7 @@ class TestScoringFormats:
 
 
 # ── TestMcSimulatorStub ───────────────────────────────────────────────
+
 
 class TestMcSimulatorStub:
     """mc_simulator=None is the default and works without error (M13 hook)."""

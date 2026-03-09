@@ -1,14 +1,12 @@
 """Tests for CLI setup wizard."""
 
 from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 from rich.console import Console
 
 from src.draft_manager.state_persistence import StatePersistence
 from src.ui.setup_wizard import SetupWizard
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -484,16 +482,16 @@ class TestConfigureDraftMode:
     def test_confirmation_panel_shows_mode(self):
         """Confirmation panel includes the mode display string."""
         responses = [
-            "1",   # New Draft
-            "2",   # Manual Tracker
-            "",    # League size default
-            "",    # Scoring default
-            "",    # Roster default
-            "",    # Team names default
-            "n",   # No pick trades
-            "",    # Draft position default
-            "",    # Data year default
-            "Y",   # Confirm
+            "1",  # New Draft
+            "2",  # Manual Tracker
+            "",  # League size default
+            "",  # Scoring default
+            "",  # Roster default
+            "",  # Team names default
+            "n",  # No pick trades
+            "",  # Draft position default
+            "",  # Data year default
+            "Y",  # Confirm
         ]
         wizard, output = _make_wizard(responses)
         wizard.run()
@@ -508,16 +506,16 @@ class TestNewDraftFlow:
     def test_new_draft_with_defaults(self):
         """Walk through new draft setup with all defaults."""
         responses = [
-            "1",   # New Draft
-            "",    # Default draft mode (simulation)
-            "",    # Default league size (12)
-            "",    # Default scoring (half_ppr)
-            "",    # Default roster (Y)
-            "",    # Auto team names (Y)
-            "n",   # No pick trades
-            "",    # Default position (1)
-            "",    # Default year (2025)
-            "Y",   # Confirm
+            "1",  # New Draft
+            "",  # Default draft mode (simulation)
+            "",  # Default league size (12)
+            "",  # Default scoring (half_ppr)
+            "",  # Default roster (Y)
+            "",  # Auto team names (Y)
+            "n",  # No pick trades
+            "",  # Default position (1)
+            "",  # Default year (2025)
+            "Y",  # Confirm
         ]
         wizard, _ = _make_wizard(responses)
         result = wizard.run()
@@ -533,16 +531,16 @@ class TestNewDraftFlow:
     def test_new_draft_manual_tracker_mode(self):
         """Selecting mode 2 sets draft_mode to manual_tracker."""
         responses = [
-            "1",   # New Draft
-            "2",   # Manual Tracker mode
-            "",    # Default league size (12)
-            "",    # Default scoring (half_ppr)
-            "",    # Default roster (Y)
-            "",    # Auto team names (Y)
-            "n",   # No pick trades
-            "",    # Default position (1)
-            "",    # Default year (2025)
-            "Y",   # Confirm
+            "1",  # New Draft
+            "2",  # Manual Tracker mode
+            "",  # Default league size (12)
+            "",  # Default scoring (half_ppr)
+            "",  # Default roster (Y)
+            "",  # Auto team names (Y)
+            "n",  # No pick trades
+            "",  # Default position (1)
+            "",  # Default year (2025)
+            "Y",  # Confirm
         ]
         wizard, _ = _make_wizard(responses)
         result = wizard.run()
@@ -553,16 +551,16 @@ class TestNewDraftFlow:
     def test_new_draft_with_defaults_has_pick_trades_key(self):
         """config dict always contains pick_trades key."""
         responses = [
-            "1",   # New Draft
-            "",    # Default draft mode
-            "",    # Default league size
-            "",    # Default scoring
-            "",    # Default roster
-            "",    # Auto team names
-            "n",   # No pick trades
-            "",    # Default position
-            "",    # Default year
-            "Y",   # Confirm
+            "1",  # New Draft
+            "",  # Default draft mode
+            "",  # Default league size
+            "",  # Default scoring
+            "",  # Default roster
+            "",  # Auto team names
+            "n",  # No pick trades
+            "",  # Default position
+            "",  # Default year
+            "Y",  # Confirm
         ]
         wizard, _ = _make_wizard(responses)
         result = wizard.run()
@@ -572,17 +570,17 @@ class TestNewDraftFlow:
     def test_new_draft_cancel_goes_back(self):
         """Cancelling at confirmation returns to main menu."""
         responses = [
-            "1",   # New Draft
-            "",    # Default draft mode
-            "",    # Default league size
-            "",    # Default scoring
-            "",    # Default roster
-            "",    # Auto team names
-            "n",   # No pick trades
-            "",    # Default position
-            "",    # Default year
-            "n",   # Cancel
-            "3",   # Quit
+            "1",  # New Draft
+            "",  # Default draft mode
+            "",  # Default league size
+            "",  # Default scoring
+            "",  # Default roster
+            "",  # Auto team names
+            "n",  # No pick trades
+            "",  # Default position
+            "",  # Default year
+            "n",  # Cancel
+            "3",  # Quit
         ]
         wizard, _ = _make_wizard(responses)
         result = wizard.run()

@@ -24,8 +24,11 @@ def pytest_collection_modifyitems(items):
     """Auto-apply the *requires_csv_data* skip to every test that uses a
     fixture which reads from DATA_DIR (ingester, cleaned_data, etc.)."""
     data_fixtures = {
-        "ingester", "cleaned_data", "merged_projections",
-        "projections_with_scoring", "transformed_data",
+        "ingester",
+        "cleaned_data",
+        "merged_projections",
+        "projections_with_scoring",
+        "transformed_data",
     }
     for item in items:
         if data_fixtures & set(item.fixturenames):
@@ -35,6 +38,7 @@ def pytest_collection_modifyitems(items):
 # ------------------------------------------------------------------
 # Lightweight factories – cheap to construct, no I/O
 # ------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def cleaner():
@@ -49,6 +53,7 @@ def transformer():
 # ------------------------------------------------------------------
 # Data-reading fixtures – expensive, reused across an entire module
 # ------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def ingester():

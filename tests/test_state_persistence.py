@@ -7,9 +7,8 @@ import pytest
 
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_initializer import DraftInitializer
-from src.draft_manager.draft_state import DraftState, LeagueConfig, Pick, TeamRoster
+from src.draft_manager.draft_state import DraftState, LeagueConfig, Pick
 from src.draft_manager.state_persistence import StatePersistence
-
 
 # ── Check data availability ──────────────────────────────────────────
 
@@ -33,8 +32,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -45,14 +50,38 @@ def _make_player_data():
     """Create a small set of players for testing."""
     players = {}
     specs = [
-        ("qb1", "QB"), ("qb2", "QB"), ("qb3", "QB"), ("qb4", "QB"),
-        ("rb1", "RB"), ("rb2", "RB"), ("rb3", "RB"), ("rb4", "RB"),
-        ("rb5", "RB"), ("rb6", "RB"), ("rb7", "RB"), ("rb8", "RB"),
-        ("wr1", "WR"), ("wr2", "WR"), ("wr3", "WR"), ("wr4", "WR"),
-        ("wr5", "WR"), ("wr6", "WR"), ("wr7", "WR"), ("wr8", "WR"),
-        ("te1", "TE"), ("te2", "TE"), ("te3", "TE"), ("te4", "TE"),
-        ("k1", "K"), ("k2", "K"), ("k3", "K"), ("k4", "K"),
-        ("dst1", "DST"), ("dst2", "DST"), ("dst3", "DST"), ("dst4", "DST"),
+        ("qb1", "QB"),
+        ("qb2", "QB"),
+        ("qb3", "QB"),
+        ("qb4", "QB"),
+        ("rb1", "RB"),
+        ("rb2", "RB"),
+        ("rb3", "RB"),
+        ("rb4", "RB"),
+        ("rb5", "RB"),
+        ("rb6", "RB"),
+        ("rb7", "RB"),
+        ("rb8", "RB"),
+        ("wr1", "WR"),
+        ("wr2", "WR"),
+        ("wr3", "WR"),
+        ("wr4", "WR"),
+        ("wr5", "WR"),
+        ("wr6", "WR"),
+        ("wr7", "WR"),
+        ("wr8", "WR"),
+        ("te1", "TE"),
+        ("te2", "TE"),
+        ("te3", "TE"),
+        ("te4", "TE"),
+        ("k1", "K"),
+        ("k2", "K"),
+        ("k3", "K"),
+        ("k4", "K"),
+        ("dst1", "DST"),
+        ("dst2", "DST"),
+        ("dst3", "DST"),
+        ("dst4", "DST"),
     ]
     for pid, pos in specs:
         players[pid] = {
@@ -121,6 +150,7 @@ class TestStatePersistenceInit:
     def test_uses_default_dir_when_none(self):
         p = StatePersistence()
         from src.draft_manager.config import DRAFTS_DIR
+
         assert p.storage_dir == DRAFTS_DIR
 
     def test_existing_dir_is_fine(self, tmp_storage):
@@ -153,10 +183,20 @@ class TestSaveDraft:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         required = {
-            "draft_id", "league_config", "draft_start_time",
-            "current_pick", "current_round", "current_team_id",
-            "draft_order", "pick_trades", "teams", "all_picks", "available_players",
-            "player_data", "is_complete", "completed_at",
+            "draft_id",
+            "league_config",
+            "draft_start_time",
+            "current_pick",
+            "current_round",
+            "current_team_id",
+            "draft_order",
+            "pick_trades",
+            "teams",
+            "all_picks",
+            "available_players",
+            "player_data",
+            "is_complete",
+            "completed_at",
         }
         assert required.issubset(data.keys())
 
@@ -458,8 +498,14 @@ class TestResumeDraft:
         state = _make_draft_state(
             league_size=2,
             roster_slots={
-                "QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0,
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
             },
         )
         ctrl = DraftController(state)
@@ -660,8 +706,14 @@ class TestEdgeCases:
         state = _make_draft_state(
             league_size=2,
             roster_slots={
-                "QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0,
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
             },
         )
         ctrl = DraftController(state)
@@ -691,8 +743,12 @@ class TestEdgeCases:
         """Pick records with slot=None survive serialization."""
         # Manually create a pick with no slot
         pick = Pick(
-            pick_number=1, round=1, team_id=0,
-            player_id="rb1", timestamp="2025-01-01", slot=None,
+            pick_number=1,
+            round=1,
+            team_id=0,
+            player_id="rb1",
+            timestamp="2025-01-01",
+            slot=None,
         )
         draft_state.all_picks.append(pick)
 
@@ -881,7 +937,7 @@ class TestPickTradesPersistence:
         loaded = persistence.load_draft(state.draft_id)
 
         r1 = loaded.draft_order[0]
-        assert r1[1] == 3   # slot formerly owned by Team 1 now belongs to Team 3
+        assert r1[1] == 3  # slot formerly owned by Team 1 now belongs to Team 3
 
     def test_backwards_compat_1d_draft_order(self, persistence):
         """Old saves with a flat 1D draft_order are auto-converted to 2D on load."""
@@ -892,12 +948,12 @@ class TestPickTradesPersistence:
         filepath = persistence.storage_dir / f"draft_{state.draft_id}.json"
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
-        data["draft_order"] = [0, 1, 2, 3]   # old 1D format
+        data["draft_order"] = [0, 1, 2, 3]  # old 1D format
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f)
 
         loaded = persistence.load_draft(state.draft_id)
         assert isinstance(loaded.draft_order, list)
         assert isinstance(loaded.draft_order[0], list)
-        assert loaded.draft_order[0] == [0, 1, 2, 3]   # Round 1 ascending
-        assert loaded.draft_order[1] == [3, 2, 1, 0]   # Round 2 descending
+        assert loaded.draft_order[0] == [0, 1, 2, 3]  # Round 1 ascending
+        assert loaded.draft_order[1] == [3, 2, 1, 0]  # Round 2 descending

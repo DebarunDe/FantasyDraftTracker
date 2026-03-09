@@ -1,7 +1,5 @@
 """Tests for roster validator and slot assignment."""
 
-import pytest
-
 from src.draft_manager.draft_state import LeagueConfig, TeamRoster
 from src.draft_manager.roster_validator import RosterValidator
 
@@ -12,8 +10,14 @@ def _make_config():
         league_size=12,
         scoring_format="half_ppr",
         roster_slots={
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     )
 
@@ -29,6 +33,7 @@ def _make_team():
 
 
 # ── Slot Determination ───────────────────────────────────────────────
+
 
 class TestDetermineRosterSlot:
     def test_fills_specific_position_first(self):
@@ -89,13 +94,23 @@ class TestDetermineRosterSlot:
         slots = []
         for i in range(9):
             slot = v.determine_roster_slot(team, "RB")
-            team.add_player(f"rb{i+1}", slot)
+            team.add_player(f"rb{i + 1}", slot)
             slots.append(slot)
-        assert slots == ["RB", "RB", "FLEX", "BENCH", "BENCH",
-                         "BENCH", "BENCH", "BENCH", "BENCH"]
+        assert slots == [
+            "RB",
+            "RB",
+            "FLEX",
+            "BENCH",
+            "BENCH",
+            "BENCH",
+            "BENCH",
+            "BENCH",
+            "BENCH",
+        ]
 
 
 # ── Final Roster Validation ──────────────────────────────────────────
+
 
 class TestValidateFinalRoster:
     def test_valid_complete_roster(self):
@@ -130,6 +145,7 @@ class TestValidateFinalRoster:
 
 
 # ── Roster Summary ───────────────────────────────────────────────────
+
 
 class TestRosterSummary:
     def test_empty_roster_summary(self):

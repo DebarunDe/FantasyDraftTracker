@@ -39,7 +39,6 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import numpy as np
 
 from src.simulation_engine.config import (
-    CANDIDATE_POOL_SIZE,
     MC_COMPUTER_PICK_TOP_K,
     MC_NUM_SIMULATIONS,
     POSITION_HARD_CAPS,
@@ -112,9 +111,7 @@ class MonteCarloSimulator:
             ValueError: If ``num_simulations`` is provided but ≤ 0.
         """
         if num_simulations is not None and num_simulations <= 0:
-            raise ValueError(
-                f"num_simulations must be a positive integer, got {num_simulations}"
-            )
+            raise ValueError(f"num_simulations must be a positive integer, got {num_simulations}")
         n = num_simulations if num_simulations is not None else MC_NUM_SIMULATIONS
         depth = self._get_simulation_depth(draft_state.current_round)
         my_team_id = draft_state.current_team_id
@@ -126,9 +123,7 @@ class MonteCarloSimulator:
         league_size = draft_state.league_config.league_size
 
         # Pre-compute VOR results once; shared as the human's greedy oracle.
-        vor_results = self.vor_calculator.calculate_from_draft_state(
-            draft_state, my_team_id
-        )
+        vor_results = self.vor_calculator.calculate_from_draft_state(draft_state, my_team_id)
 
         available_ids: set = set(draft_state.available_players)
 
@@ -239,9 +234,7 @@ class MonteCarloSimulator:
         cand_pos = player_data.get(candidate_id, {}).get("position", "")
         if cand_pos:
             my_picks.append((candidate_id, cand_pos))
-            team_pos_counts[my_team_id][cand_pos] = (
-                team_pos_counts[my_team_id].get(cand_pos, 0) + 1
-            )
+            team_pos_counts[my_team_id][cand_pos] = team_pos_counts[my_team_id].get(cand_pos, 0) + 1
 
         # Cursor for my team's VOR picks: advances monotonically through
         # vor_sorted so each simulation sweeps the list at most once total
@@ -323,10 +316,7 @@ class MonteCarloSimulator:
             available_ids,
             key=lambda pid: player_data.get(pid, {}).get("overall_rank") or 9999,
         )
-        return [
-            (pid, player_data.get(pid, {}).get("position", ""))
-            for pid in sorted_ids
-        ]
+        return [(pid, player_data.get(pid, {}).get("position", "")) for pid in sorted_ids]
 
     @staticmethod
     def _extract_team_pos_counts(
@@ -350,6 +340,7 @@ class MonteCarloSimulator:
 # ------------------------------------------------------------------
 # Module-level pure functions (used inside the hot simulation loop)
 # ------------------------------------------------------------------
+
 
 def _get_team_for_pick(
     pick_num: int,
@@ -490,7 +481,7 @@ def _score_team(
         flex_candidates: List[float] = []
         for pos in FLEX_ELIGIBLE:
             pts_list = by_position.get(pos, [])
-            flex_candidates.extend(pts_list[used[pos]:])
+            flex_candidates.extend(pts_list[used[pos] :])
         flex_candidates.sort(reverse=True)
         total += sum(flex_candidates[:flex_slots])
 

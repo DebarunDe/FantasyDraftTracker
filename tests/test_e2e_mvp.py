@@ -24,7 +24,7 @@ import re
 import tempfile
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 from unittest.mock import MagicMock
 
 import pytest
@@ -41,7 +41,6 @@ from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.cli import DraftApp
 
-
 # ── Constants ────────────────────────────────────────────────────────
 
 PROCESSED_DIR = Path(__file__).parent.parent / "data" / "processed"
@@ -53,22 +52,31 @@ requires_player_data = pytest.mark.skipif(
 )
 
 STANDARD_ROSTER = {
-    "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-    "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+    "QB": 1,
+    "RB": 2,
+    "WR": 2,
+    "TE": 1,
+    "FLEX": 1,
+    "DST": 1,
+    "K": 1,
+    "BENCH": 6,
 }
 
 
 # ── Shared helpers ───────────────────────────────────────────────────
 
-def _make_player_pool(
-    n_qb=10, n_rb=20, n_wr=20, n_te=10, n_k=8, n_dst=8
-) -> Dict[str, Dict]:
+
+def _make_player_pool(n_qb=10, n_rb=20, n_wr=20, n_te=10, n_k=8, n_dst=8) -> Dict[str, Dict]:
     """Build a synthetic player pool large enough for full-league drafts."""
     players = {}
     rank = 1
     for pos, count in [
-        ("QB", n_qb), ("RB", n_rb), ("WR", n_wr),
-        ("TE", n_te), ("K", n_k), ("DST", n_dst)
+        ("QB", n_qb),
+        ("RB", n_rb),
+        ("WR", n_wr),
+        ("TE", n_te),
+        ("K", n_k),
+        ("DST", n_dst),
     ]:
         for i in range(1, count + 1):
             pid = f"{pos.lower()}{i}"
@@ -147,14 +155,13 @@ def _run_programmatic_draft(
         current_team = state.get_current_team()
         available = controller.get_available_players()
         from src.draft_manager.draft_rules import DraftRules
+
         rules = DraftRules(state)
         legal = [
-            p for p in available
-            if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+            p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
         ]
         assert legal, (
-            f"No legal picks at pick {state.current_pick} "
-            f"for team {current_team.team_name}"
+            f"No legal picks at pick {state.current_pick} for team {current_team.team_name}"
         )
         player_id = drafter.make_pick(state, legal, current_team.team_id)
         controller.make_pick(current_team.team_id, player_id)
@@ -170,6 +177,7 @@ def _expected_roster_totals(roster_slots: Dict) -> int:
 
 
 # ── TestProgrammaticFullDraft ────────────────────────────────────────
+
 
 class TestProgrammaticFullDraft:
     """Full simulation mode drafts verified at the state level."""
@@ -205,9 +213,7 @@ class TestProgrammaticFullDraft:
         expected = _expected_roster_totals(roster_slots)
         for team in state.teams:
             total = sum(len(v) for v in team.roster.values())
-            assert total == expected, (
-                f"{team.team_name} has {total} players, expected {expected}"
-            )
+            assert total == expected, f"{team.team_name} has {total} players, expected {expected}"
 
     def test_picks_reference_correct_teams(self):
         """Every pick's team_id must match the snake draft order."""
@@ -224,8 +230,7 @@ class TestProgrammaticFullDraft:
             for slot, player_ids in team.roster.items():
                 limit = roster_slots.get(slot, 0)
                 assert len(player_ids) <= limit, (
-                    f"{team.team_name} slot {slot} has {len(player_ids)}, "
-                    f"limit is {limit}"
+                    f"{team.team_name} slot {slot} has {len(player_ids)}, limit is {limit}"
                 )
 
     def test_completed_at_timestamp_set(self):
@@ -241,13 +246,12 @@ class TestProgrammaticFullDraft:
 
 # ── TestManualTrackerFullDraft ────────────────────────────────────────
 
+
 class TestManualTrackerFullDraft:
     """Full drafts in manual_tracker mode (all picks entered by 'user')."""
 
     def test_12team_manual_draft_completes(self):
-        state = _run_programmatic_draft(
-            league_size=12, draft_mode="manual_tracker"
-        )
+        state = _run_programmatic_draft(league_size=12, draft_mode="manual_tracker")
         assert state.is_complete
 
     def test_manual_mode_all_picks_recorded(self):
@@ -259,9 +263,7 @@ class TestManualTrackerFullDraft:
         assert len(state.all_picks) == expected
 
     def test_manual_mode_no_player_drafted_twice(self):
-        state = _run_programmatic_draft(
-            league_size=8, draft_mode="manual_tracker"
-        )
+        state = _run_programmatic_draft(league_size=8, draft_mode="manual_tracker")
         drafted_ids = [p.player_id for p in state.all_picks]
         assert len(drafted_ids) == len(set(drafted_ids))
 
@@ -273,15 +275,11 @@ class TestManualTrackerFullDraft:
         expected = _expected_roster_totals(roster_slots)
         for team in state.teams:
             total = sum(len(v) for v in team.roster.values())
-            assert total == expected, (
-                f"{team.team_name} has {total} players, expected {expected}"
-            )
+            assert total == expected, f"{team.team_name} has {total} players, expected {expected}"
 
     def test_manual_mode_drafted_players_removed_from_available(self):
         """All manually-entered picks are removed from the available pool."""
-        state = _run_programmatic_draft(
-            league_size=4, draft_mode="manual_tracker"
-        )
+        state = _run_programmatic_draft(league_size=4, draft_mode="manual_tracker")
         drafted_ids = {p.player_id for p in state.all_picks}
         remaining = set(state.available_players)
         assert drafted_ids.isdisjoint(remaining), (
@@ -289,13 +287,12 @@ class TestManualTrackerFullDraft:
         )
 
     def test_manual_mode_draft_id_set(self):
-        state = _run_programmatic_draft(
-            league_size=4, draft_mode="manual_tracker"
-        )
+        state = _run_programmatic_draft(league_size=4, draft_mode="manual_tracker")
         assert state.draft_id is not None and len(state.draft_id) > 0
 
 
 # ── TestSaveResumeCycle ──────────────────────────────────────────────
+
 
 class TestSaveResumeCycle:
     """Save mid-draft → load → complete."""
@@ -306,11 +303,17 @@ class TestSaveResumeCycle:
         Roster: 11 slots × 4 teams = 44 picks total. Pool must have ≥44 players.
         Pool: 8+16+16+8+8+8 = 64 players — enough headroom.
         """
-        roster_slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1,
-                        "FLEX": 1, "DST": 1, "K": 1, "BENCH": 2}
-        player_data = _make_player_pool(
-            n_qb=8, n_rb=16, n_wr=16, n_te=8, n_k=8, n_dst=8
-        )
+        roster_slots = {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 2,
+        }
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8, n_k=8, n_dst=8)
         config = LeagueConfig(
             league_id="resume_test",
             league_size=4,
@@ -330,6 +333,7 @@ class TestSaveResumeCycle:
         vor_calc = DynamicVORCalculator("half_ppr", league_size=4)
         drafter = ComputerDrafter(vor_calc, strategy="balanced")
         from src.draft_manager.draft_rules import DraftRules
+
         for _ in range(n_picks_to_make):
             if controller.is_complete:
                 break
@@ -337,8 +341,7 @@ class TestSaveResumeCycle:
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -389,13 +392,13 @@ class TestSaveResumeCycle:
         vor_calc2 = DynamicVORCalculator("half_ppr", league_size=4)
         drafter2 = ComputerDrafter(vor_calc2, strategy="balanced")
         from src.draft_manager.draft_rules import DraftRules
+
         while not controller2.is_complete:
             current_team = loaded.get_current_team()
             available = controller2.get_available_players()
             rules = DraftRules(loaded)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter2.make_pick(loaded, legal, current_team.team_id)
             controller2.make_pick(current_team.team_id, pid)
@@ -428,13 +431,13 @@ class TestSaveResumeCycle:
         vor_calc = DynamicVORCalculator("half_ppr", league_size=4)
         drafter = ComputerDrafter(vor_calc, strategy="balanced")
         from src.draft_manager.draft_rules import DraftRules
+
         while not controller.is_complete:
             current_team = state.get_current_team()
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -472,6 +475,7 @@ class TestSaveResumeCycle:
 
 # ── TestRealDataDraft ────────────────────────────────────────────────
 
+
 class TestRealDataDraft:
     """Tests using real players_2025.json via DraftInitializer."""
 
@@ -499,12 +503,10 @@ class TestRealDataDraft:
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             assert legal, (
-                f"No legal picks at pick {state.current_pick} "
-                f"for {current_team.team_name}"
+                f"No legal picks at pick {state.current_pick} for {current_team.team_name}"
             )
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -534,8 +536,7 @@ class TestRealDataDraft:
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -543,9 +544,7 @@ class TestRealDataDraft:
         expected = _expected_roster_totals(STANDARD_ROSTER)
         for team in state.teams:
             total = sum(len(v) for v in team.roster.values())
-            assert total == expected, (
-                f"{team.team_name}: {total} players, expected {expected}"
-            )
+            assert total == expected, f"{team.team_name}: {total} players, expected {expected}"
 
     @requires_player_data
     def test_real_data_no_player_drafted_twice(self):
@@ -570,8 +569,7 @@ class TestRealDataDraft:
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -602,8 +600,7 @@ class TestRealDataDraft:
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -639,8 +636,7 @@ class TestRealDataDraft:
             available = controller.get_available_players()
             rules = DraftRules(state)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
@@ -664,8 +660,7 @@ class TestRealDataDraft:
             available = controller2.get_available_players()
             rules = DraftRules(loaded)
             legal = [
-                p for p in available
-                if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
             ]
             pid = drafter2.make_pick(loaded, legal, current_team.team_id)
             controller2.make_pick(current_team.team_id, pid)
@@ -674,6 +669,7 @@ class TestRealDataDraft:
 
 
 # ── TestMultipleLeagueSizes ──────────────────────────────────────────
+
 
 class TestMultipleLeagueSizes:
     """Verify drafts complete cleanly across 8/10/12/14-team leagues."""
@@ -686,18 +682,14 @@ class TestMultipleLeagueSizes:
     @pytest.mark.parametrize("league_size", [8, 10, 12, 14])
     def test_correct_total_picks(self, league_size):
         roster_slots = dict(STANDARD_ROSTER)
-        state = _run_programmatic_draft(
-            league_size=league_size, roster_slots=roster_slots
-        )
+        state = _run_programmatic_draft(league_size=league_size, roster_slots=roster_slots)
         expected = sum(roster_slots.values()) * league_size
         assert len(state.all_picks) == expected
 
     @pytest.mark.parametrize("league_size", [8, 10, 12, 14])
     def test_all_teams_full_rosters(self, league_size):
         roster_slots = dict(STANDARD_ROSTER)
-        state = _run_programmatic_draft(
-            league_size=league_size, roster_slots=roster_slots
-        )
+        state = _run_programmatic_draft(league_size=league_size, roster_slots=roster_slots)
         expected = _expected_roster_totals(roster_slots)
         for team in state.teams:
             total = sum(len(v) for v in team.roster.values())
@@ -708,26 +700,24 @@ class TestMultipleLeagueSizes:
 
 # ── TestMultipleScoringFormats ───────────────────────────────────────
 
+
 class TestMultipleScoringFormats:
     """Drafts complete for all three scoring formats."""
 
     @pytest.mark.parametrize("scoring_format", ["standard", "half_ppr", "full_ppr"])
     def test_draft_completes(self, scoring_format):
-        state = _run_programmatic_draft(
-            league_size=8, scoring_format=scoring_format
-        )
+        state = _run_programmatic_draft(league_size=8, scoring_format=scoring_format)
         assert state.is_complete
 
     @pytest.mark.parametrize("scoring_format", ["standard", "half_ppr", "full_ppr"])
     def test_no_player_drafted_twice(self, scoring_format):
-        state = _run_programmatic_draft(
-            league_size=8, scoring_format=scoring_format
-        )
+        state = _run_programmatic_draft(league_size=8, scoring_format=scoring_format)
         drafted_ids = [p.player_id for p in state.all_picks]
         assert len(drafted_ids) == len(set(drafted_ids))
 
 
 # ── TestRosterValidity ───────────────────────────────────────────────
+
 
 class TestRosterValidity:
     """Rigorous roster slot validation after full drafts."""
@@ -748,8 +738,7 @@ class TestRosterValidity:
             for slot, player_ids in team.roster.items():
                 limit = roster_slots[slot]
                 assert len(player_ids) <= limit, (
-                    f"{team.team_name} slot {slot}: "
-                    f"{len(player_ids)} > limit {limit}"
+                    f"{team.team_name} slot {slot}: {len(player_ids)} > limit {limit}"
                 )
 
     def test_every_team_has_one_qb_in_qb_slot(self):
@@ -776,9 +765,7 @@ class TestRosterValidity:
         for team in state.teams:
             for pid in team.roster.get("FLEX", []):
                 pos = state.player_data[pid]["position"]
-                assert pos in eligible, (
-                    f"{team.team_name} FLEX slot has {pos} (not eligible)"
-                )
+                assert pos in eligible, f"{team.team_name} FLEX slot has {pos} (not eligible)"
 
     def test_draft_ids_unique_across_multiple_drafts(self):
         """Concurrent draft creation yields unique IDs."""
@@ -788,6 +775,7 @@ class TestRosterValidity:
 
 
 # ── TestDraftSummary ─────────────────────────────────────────────────
+
 
 class TestDraftSummary:
     """get_draft_summary() correctness after full draft completion."""
@@ -801,8 +789,12 @@ class TestDraftSummary:
         """get_draft_summary() returns error dict if draft not complete."""
         player_data = _make_player_pool(n_qb=4, n_rb=8, n_wr=8, n_te=4, n_k=4, n_dst=4)
         config = LeagueConfig(
-            league_id="t", league_size=4, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
+            league_id="t",
+            league_size=4,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
             roster_slots=dict(STANDARD_ROSTER),
         )
         state = DraftState.create_new(
@@ -830,9 +822,7 @@ class TestDraftSummary:
         controller, state = self._complete_draft(league_size=4)
         summary = controller.get_draft_summary()
         for team_s in summary["teams"]:
-            assert team_s["projected_points"] > 0, (
-                f"{team_s['team_name']} has 0 projected points"
-            )
+            assert team_s["projected_points"] > 0, f"{team_s['team_name']} has 0 projected points"
 
     def test_summary_has_completed_at(self):
         controller, state = self._complete_draft(league_size=4)
@@ -865,12 +855,20 @@ class TestDraftSummary:
 
 # ── CLI helpers ──────────────────────────────────────────────────────
 
-def _make_cli_app(responses, draft_mode="simulation",
-                  league_size=2, roster_slots=None):
+
+def _make_cli_app(responses, draft_mode="simulation", league_size=2, roster_slots=None):
     """Create DraftApp with minimal draft state and captured output."""
     if roster_slots is None:
-        roster_slots = {"QB": 1, "RB": 1, "WR": 1, "TE": 0,
-                        "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0}
+        roster_slots = {
+            "QB": 1,
+            "RB": 1,
+            "WR": 1,
+            "TE": 0,
+            "FLEX": 0,
+            "DST": 0,
+            "K": 0,
+            "BENCH": 0,
+        }
 
     output = StringIO()
     console = Console(file=output, width=120, force_terminal=True)
@@ -897,21 +895,33 @@ def _make_cli_app(responses, draft_mode="simulation",
     ]
     for pid, name, pos, team, rank in specs:
         player_data[pid] = {
-            "player_id": pid, "name": name, "position": pos, "team": team,
-            "overall_rank": rank, "bye_week": 7,
-            "projections": {"standard": 200.0 - rank * 10,
-                            "half_ppr": 210.0 - rank * 10,
-                            "full_ppr": 220.0 - rank * 10},
-            "baseline_vor": {"standard": 50.0 - rank * 5,
-                             "half_ppr": 55.0 - rank * 5,
-                             "full_ppr": 60.0 - rank * 5},
+            "player_id": pid,
+            "name": name,
+            "position": pos,
+            "team": team,
+            "overall_rank": rank,
+            "bye_week": 7,
+            "projections": {
+                "standard": 200.0 - rank * 10,
+                "half_ppr": 210.0 - rank * 10,
+                "full_ppr": 220.0 - rank * 10,
+            },
+            "baseline_vor": {
+                "standard": 50.0 - rank * 5,
+                "half_ppr": 55.0 - rank * 5,
+                "full_ppr": 60.0 - rank * 5,
+            },
         }
 
     from src.ui.player_search import PlayerSearcher
+
     config = LeagueConfig(
-        league_id="cli_test", league_size=league_size,
-        scoring_format="half_ppr", draft_type="snake",
-        draft_mode=draft_mode, data_year=2025,
+        league_id="cli_test",
+        league_size=league_size,
+        scoring_format="half_ppr",
+        draft_type="snake",
+        draft_mode=draft_mode,
+        data_year=2025,
         roster_slots=roster_slots,
     )
     app.draft_state = DraftState.create_new(
@@ -922,9 +932,7 @@ def _make_cli_app(responses, draft_mode="simulation",
     )
     app.controller = DraftController(app.draft_state)
     app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=league_size)
-    app.computer_drafter = ComputerDrafter(
-        vor_calculator=app.vor_calculator, strategy="balanced"
-    )
+    app.computer_drafter = ComputerDrafter(vor_calculator=app.vor_calculator, strategy="balanced")
     app.searcher = PlayerSearcher(app.controller)
     app.recommender = PickRecommender(vor_calculator=app.vor_calculator)
     app.persistence = MagicMock(spec=StatePersistence)
@@ -934,6 +942,7 @@ def _make_cli_app(responses, draft_mode="simulation",
 
 # ── TestCLIFullDraftFlow ─────────────────────────────────────────────
 
+
 class TestCLIFullDraftFlow:
     """DraftApp end-to-end through _draft_loop() in simulation mode.
 
@@ -942,52 +951,77 @@ class TestCLIFullDraftFlow:
     """
 
     def test_full_draft_completes_via_draft_loop(self):
-        app, output = _make_cli_app([
-            "1", "y",  # Pick 1: human
-            "1", "y",  # Pick 4: human
-            "1", "y",  # Pick 5: human
-        ])
+        app, output = _make_cli_app(
+            [
+                "1",
+                "y",  # Pick 1: human
+                "1",
+                "y",  # Pick 4: human
+                "1",
+                "y",  # Pick 5: human
+            ]
+        )
         app._draft_loop()
         assert app.controller.is_complete
         assert len(app.draft_state.all_picks) == 6
 
     def test_all_teams_have_expected_players(self):
-        app, output = _make_cli_app([
-            "1", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "1",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         for team in app.draft_state.teams:
             total = sum(len(v) for v in team.roster.values())
             assert total == 3  # QB+RB+WR per team
 
     def test_no_player_drafted_twice(self):
-        app, output = _make_cli_app([
-            "1", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "1",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         ids = [p.player_id for p in app.draft_state.all_picks]
         assert len(ids) == len(set(ids))
 
     def test_auto_save_called_for_every_pick(self):
-        app, output = _make_cli_app([
-            "1", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "1",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         # 6 picks total → save_draft called 6 times (auto-save after each pick)
         assert app.persistence.save_draft.call_count == 6
 
     def test_draft_summary_correct_after_completion(self):
-        app, output = _make_cli_app([
-            "1", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "1",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         summary = app.controller.get_draft_summary()
         assert "error" not in summary
@@ -996,36 +1030,51 @@ class TestCLIFullDraftFlow:
 
     def test_board_command_during_draft(self):
         """'b' command redisplays the board mid-pick."""
-        app, output = _make_cli_app([
-            "b",          # Redisplay board
-            "Josh Allen", "y",  # Then pick
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "b",  # Redisplay board
+                "Josh Allen",
+                "y",  # Then pick
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         assert app.controller.is_complete
         assert "Round 1" in text
 
     def test_roster_command_shows_team_name(self):
-        app, output = _make_cli_app([
-            "r",           # Show roster before picking
-            "Josh Allen", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "r",  # Show roster before picking
+                "Josh Allen",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         assert "My Team" in text
 
     def test_search_then_pick_by_number(self):
         """s <name> → shows results → pick by #."""
-        app, output = _make_cli_app([
-            "s allen",    # Search
-            "1", "y",     # Pick #1 from results
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "s allen",  # Search
+                "1",
+                "y",  # Pick #1 from results
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         assert app.controller.is_complete
 
@@ -1043,6 +1092,7 @@ class TestCLIFullDraftFlow:
 
 # ── TestManualTrackerCLIFlow ─────────────────────────────────────────
 
+
 class TestManualTrackerCLIFlow:
     """DraftApp in manual_tracker mode through full _draft_loop()."""
 
@@ -1050,12 +1100,18 @@ class TestManualTrackerCLIFlow:
         """All 6 picks entered manually by the user."""
         app, output = _make_cli_app(
             [
-                "Josh Allen", "y",      # Pick 1: T0
-                "Jalen Hurts", "y",     # Pick 2: T1
-                "Saquon Barkley", "y",  # Pick 3: T1
-                "Breece Hall", "y",     # Pick 4: T0
-                "Ja'Marr Chase", "y",   # Pick 5: T0
-                "CeeDee Lamb", "y",     # Pick 6: T1
+                "Josh Allen",
+                "y",  # Pick 1: T0
+                "Jalen Hurts",
+                "y",  # Pick 2: T1
+                "Saquon Barkley",
+                "y",  # Pick 3: T1
+                "Breece Hall",
+                "y",  # Pick 4: T0
+                "Ja'Marr Chase",
+                "y",  # Pick 5: T0
+                "CeeDee Lamb",
+                "y",  # Pick 6: T1
             ],
             draft_mode="manual_tracker",
         )
@@ -1066,12 +1122,18 @@ class TestManualTrackerCLIFlow:
     def test_no_auto_picks_in_manual_tracker(self):
         """Verify all 6 picks consumed user input (not auto-picked)."""
         inputs = [
-            "Josh Allen", "y",
-            "Jalen Hurts", "y",
-            "Saquon Barkley", "y",
-            "Breece Hall", "y",
-            "Ja'Marr Chase", "y",
-            "CeeDee Lamb", "y",
+            "Josh Allen",
+            "y",
+            "Jalen Hurts",
+            "y",
+            "Saquon Barkley",
+            "y",
+            "Breece Hall",
+            "y",
+            "Ja'Marr Chase",
+            "y",
+            "CeeDee Lamb",
+            "y",
         ]
         call_count = 0
         output = StringIO()
@@ -1089,39 +1151,87 @@ class TestManualTrackerCLIFlow:
         console.input = counting_input
 
         from src.ui.player_search import PlayerSearcher
+
         app = DraftApp(console=console)
         config = LeagueConfig(
-            league_id="cnt_test", league_size=2,
-            scoring_format="half_ppr", draft_type="snake",
-            draft_mode="manual_tracker", data_year=2025,
-            roster_slots={"QB": 1, "RB": 1, "WR": 1, "TE": 0,
-                          "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0},
+            league_id="cnt_test",
+            league_size=2,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="manual_tracker",
+            data_year=2025,
+            roster_slots={
+                "QB": 1,
+                "RB": 1,
+                "WR": 1,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
+            },
         )
         player_data = {
-            "qb1": {"player_id": "qb1", "name": "Josh Allen", "position": "QB",
-                    "team": "BUF", "overall_rank": 1, "bye_week": 7,
-                    "projections": {"standard": 190, "half_ppr": 200, "full_ppr": 210},
-                    "baseline_vor": {"standard": 45, "half_ppr": 50, "full_ppr": 55}},
-            "qb2": {"player_id": "qb2", "name": "Jalen Hurts", "position": "QB",
-                    "team": "PHI", "overall_rank": 2, "bye_week": 7,
-                    "projections": {"standard": 180, "half_ppr": 190, "full_ppr": 200},
-                    "baseline_vor": {"standard": 40, "half_ppr": 45, "full_ppr": 50}},
-            "rb1": {"player_id": "rb1", "name": "Saquon Barkley", "position": "RB",
-                    "team": "PHI", "overall_rank": 3, "bye_week": 7,
-                    "projections": {"standard": 170, "half_ppr": 180, "full_ppr": 190},
-                    "baseline_vor": {"standard": 35, "half_ppr": 40, "full_ppr": 45}},
-            "rb2": {"player_id": "rb2", "name": "Breece Hall", "position": "RB",
-                    "team": "NYJ", "overall_rank": 4, "bye_week": 7,
-                    "projections": {"standard": 160, "half_ppr": 170, "full_ppr": 180},
-                    "baseline_vor": {"standard": 30, "half_ppr": 35, "full_ppr": 40}},
-            "wr1": {"player_id": "wr1", "name": "Ja'Marr Chase", "position": "WR",
-                    "team": "CIN", "overall_rank": 5, "bye_week": 7,
-                    "projections": {"standard": 150, "half_ppr": 160, "full_ppr": 170},
-                    "baseline_vor": {"standard": 25, "half_ppr": 30, "full_ppr": 35}},
-            "wr2": {"player_id": "wr2", "name": "CeeDee Lamb", "position": "WR",
-                    "team": "DAL", "overall_rank": 6, "bye_week": 7,
-                    "projections": {"standard": 140, "half_ppr": 150, "full_ppr": 160},
-                    "baseline_vor": {"standard": 20, "half_ppr": 25, "full_ppr": 30}},
+            "qb1": {
+                "player_id": "qb1",
+                "name": "Josh Allen",
+                "position": "QB",
+                "team": "BUF",
+                "overall_rank": 1,
+                "bye_week": 7,
+                "projections": {"standard": 190, "half_ppr": 200, "full_ppr": 210},
+                "baseline_vor": {"standard": 45, "half_ppr": 50, "full_ppr": 55},
+            },
+            "qb2": {
+                "player_id": "qb2",
+                "name": "Jalen Hurts",
+                "position": "QB",
+                "team": "PHI",
+                "overall_rank": 2,
+                "bye_week": 7,
+                "projections": {"standard": 180, "half_ppr": 190, "full_ppr": 200},
+                "baseline_vor": {"standard": 40, "half_ppr": 45, "full_ppr": 50},
+            },
+            "rb1": {
+                "player_id": "rb1",
+                "name": "Saquon Barkley",
+                "position": "RB",
+                "team": "PHI",
+                "overall_rank": 3,
+                "bye_week": 7,
+                "projections": {"standard": 170, "half_ppr": 180, "full_ppr": 190},
+                "baseline_vor": {"standard": 35, "half_ppr": 40, "full_ppr": 45},
+            },
+            "rb2": {
+                "player_id": "rb2",
+                "name": "Breece Hall",
+                "position": "RB",
+                "team": "NYJ",
+                "overall_rank": 4,
+                "bye_week": 7,
+                "projections": {"standard": 160, "half_ppr": 170, "full_ppr": 180},
+                "baseline_vor": {"standard": 30, "half_ppr": 35, "full_ppr": 40},
+            },
+            "wr1": {
+                "player_id": "wr1",
+                "name": "Ja'Marr Chase",
+                "position": "WR",
+                "team": "CIN",
+                "overall_rank": 5,
+                "bye_week": 7,
+                "projections": {"standard": 150, "half_ppr": 160, "full_ppr": 170},
+                "baseline_vor": {"standard": 25, "half_ppr": 30, "full_ppr": 35},
+            },
+            "wr2": {
+                "player_id": "wr2",
+                "name": "CeeDee Lamb",
+                "position": "WR",
+                "team": "DAL",
+                "overall_rank": 6,
+                "bye_week": 7,
+                "projections": {"standard": 140, "half_ppr": 150, "full_ppr": 160},
+                "baseline_vor": {"standard": 20, "half_ppr": 25, "full_ppr": 30},
+            },
         }
         app.draft_state = DraftState.create_new(
             league_config=config,
@@ -1146,9 +1256,20 @@ class TestManualTrackerCLIFlow:
 
     def test_manual_header_label_shown(self):
         app, output = _make_cli_app(
-            ["Josh Allen", "y", "Jalen Hurts", "y",
-             "Saquon Barkley", "y", "Breece Hall", "y",
-             "Ja'Marr Chase", "y", "CeeDee Lamb", "y"],
+            [
+                "Josh Allen",
+                "y",
+                "Jalen Hurts",
+                "y",
+                "Saquon Barkley",
+                "y",
+                "Breece Hall",
+                "y",
+                "Ja'Marr Chase",
+                "y",
+                "CeeDee Lamb",
+                "y",
+            ],
             draft_mode="manual_tracker",
         )
         app._draft_loop()
@@ -1157,12 +1278,21 @@ class TestManualTrackerCLIFlow:
     def test_sim_command_rejected_in_manual_mode(self):
         """sim command shows error and does NOT complete draft."""
         app, output = _make_cli_app(
-            ["sim", "Josh Allen", "y",  # pick 1: human
-             "Jalen Hurts", "y",        # pick 2: T1 manual
-             "Saquon Barkley", "y",     # pick 3: T1 manual
-             "Breece Hall", "y",        # pick 4: T0 manual
-             "Ja'Marr Chase", "y",      # pick 5: T0 manual
-             "CeeDee Lamb", "y"],       # pick 6: T1 manual
+            [
+                "sim",
+                "Josh Allen",
+                "y",  # pick 1: human
+                "Jalen Hurts",
+                "y",  # pick 2: T1 manual
+                "Saquon Barkley",
+                "y",  # pick 3: T1 manual
+                "Breece Hall",
+                "y",  # pick 4: T0 manual
+                "Ja'Marr Chase",
+                "y",  # pick 5: T0 manual
+                "CeeDee Lamb",
+                "y",
+            ],  # pick 6: T1 manual
             draft_mode="manual_tracker",
         )
         app._draft_loop()
@@ -1172,9 +1302,20 @@ class TestManualTrackerCLIFlow:
 
     def test_recs_shown_for_human_turn_manual(self):
         app, output = _make_cli_app(
-            ["Josh Allen", "y", "Jalen Hurts", "y",
-             "Saquon Barkley", "y", "Breece Hall", "y",
-             "Ja'Marr Chase", "y", "CeeDee Lamb", "y"],
+            [
+                "Josh Allen",
+                "y",
+                "Jalen Hurts",
+                "y",
+                "Saquon Barkley",
+                "y",
+                "Breece Hall",
+                "y",
+                "Ja'Marr Chase",
+                "y",
+                "CeeDee Lamb",
+                "y",
+            ],
             draft_mode="manual_tracker",
         )
         app._handle_pick_turn()  # Pick 1: human turn
@@ -1182,24 +1323,38 @@ class TestManualTrackerCLIFlow:
 
     def test_available_shown_for_cpu_turn_manual(self):
         app, output = _make_cli_app(
-            ["Josh Allen", "y",   # human pick 1
-             "Jalen Hurts", "y",  # cpu pick 2 in manual mode
-             ],
+            [
+                "Josh Allen",
+                "y",  # human pick 1
+                "Jalen Hurts",
+                "y",  # cpu pick 2 in manual mode
+            ],
             draft_mode="manual_tracker",
         )
-        app._handle_pick_turn()   # Pick 1: human
+        app._handle_pick_turn()  # Pick 1: human
         output.truncate(0)
         output.seek(0)
-        app._handle_pick_turn()   # Pick 2: CPU team (but user enters it)
+        app._handle_pick_turn()  # Pick 2: CPU team (but user enters it)
         text = output.getvalue()
         assert "Available Players" in text
         assert "Recommendations" not in text
 
     def test_auto_save_after_each_manual_pick(self):
         app, output = _make_cli_app(
-            ["Josh Allen", "y", "Jalen Hurts", "y",
-             "Saquon Barkley", "y", "Breece Hall", "y",
-             "Ja'Marr Chase", "y", "CeeDee Lamb", "y"],
+            [
+                "Josh Allen",
+                "y",
+                "Jalen Hurts",
+                "y",
+                "Saquon Barkley",
+                "y",
+                "Breece Hall",
+                "y",
+                "Ja'Marr Chase",
+                "y",
+                "CeeDee Lamb",
+                "y",
+            ],
             draft_mode="manual_tracker",
         )
         app._draft_loop()
@@ -1208,6 +1363,7 @@ class TestManualTrackerCLIFlow:
 
 # ── TestEdgeCases ────────────────────────────────────────────────────
 
+
 class TestEdgeCases:
     """Error recovery, boundary conditions, and validation edge cases."""
 
@@ -1215,14 +1371,28 @@ class TestEdgeCases:
         """Attempting to pick an already-drafted player raises ValidationError."""
         player_data = _make_player_pool(n_qb=4, n_rb=4, n_wr=4, n_te=4, n_k=2, n_dst=2)
         config = LeagueConfig(
-            league_id="e", league_size=2, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
-            roster_slots={"QB": 1, "RB": 1, "WR": 1, "TE": 0,
-                          "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0},
+            league_id="e",
+            league_size=2,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
+            roster_slots={
+                "QB": 1,
+                "RB": 1,
+                "WR": 1,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
+            },
         )
         state = DraftState.create_new(
             league_config=config,
-            team_names=["T0", "T1"], human_team_id=0, player_data=player_data,
+            team_names=["T0", "T1"],
+            human_team_id=0,
+            player_data=player_data,
         )
         controller = DraftController(state)
         first_pid = state.available_players[0]
@@ -1235,14 +1405,28 @@ class TestEdgeCases:
     def test_nonexistent_player_rejected(self):
         player_data = _make_player_pool(n_qb=2, n_rb=2, n_wr=2, n_te=2, n_k=2, n_dst=2)
         config = LeagueConfig(
-            league_id="e", league_size=2, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
-            roster_slots={"QB": 1, "RB": 1, "WR": 1, "TE": 0,
-                          "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0},
+            league_id="e",
+            league_size=2,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
+            roster_slots={
+                "QB": 1,
+                "RB": 1,
+                "WR": 1,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
+            },
         )
         state = DraftState.create_new(
             league_config=config,
-            team_names=["T0", "T1"], human_team_id=0, player_data=player_data,
+            team_names=["T0", "T1"],
+            human_team_id=0,
+            player_data=player_data,
         )
         controller = DraftController(state)
         with pytest.raises(ValidationError, match="not found"):
@@ -1252,14 +1436,28 @@ class TestEdgeCases:
         """make_pick after is_complete raises ValidationError."""
         player_data = _make_player_pool(n_qb=2, n_rb=2, n_wr=2, n_te=2, n_k=2, n_dst=2)
         config = LeagueConfig(
-            league_id="e", league_size=2, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
-            roster_slots={"QB": 1, "RB": 0, "WR": 0, "TE": 0,
-                          "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0},
+            league_id="e",
+            league_size=2,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
+            roster_slots={
+                "QB": 1,
+                "RB": 0,
+                "WR": 0,
+                "TE": 0,
+                "FLEX": 0,
+                "DST": 0,
+                "K": 0,
+                "BENCH": 0,
+            },
         )
         state = DraftState.create_new(
             league_config=config,
-            team_names=["T0", "T1"], human_team_id=0, player_data=player_data,
+            team_names=["T0", "T1"],
+            human_team_id=0,
+            player_data=player_data,
         )
         controller = DraftController(state)
         controller.make_pick(0, "qb1")
@@ -1310,37 +1508,64 @@ class TestEdgeCases:
 
     def test_snake_draft_order_correct(self):
         """Verify snake order: T0 T1 T2 T3 T3 T2 T1 T0 T0 T1 ..."""
-        roster_slots = {"QB": 1, "RB": 1, "WR": 1, "TE": 0,
-                        "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0}
+        roster_slots = {
+            "QB": 1,
+            "RB": 1,
+            "WR": 1,
+            "TE": 0,
+            "FLEX": 0,
+            "DST": 0,
+            "K": 0,
+            "BENCH": 0,
+        }
         state = _run_programmatic_draft(league_size=4, roster_slots=roster_slots)
         expected_team_order = [
-            0, 1, 2, 3,  # Round 1 forward
-            3, 2, 1, 0,  # Round 2 backward
-            0, 1, 2, 3,  # Round 3 forward
+            0,
+            1,
+            2,
+            3,  # Round 1 forward
+            3,
+            2,
+            1,
+            0,  # Round 2 backward
+            0,
+            1,
+            2,
+            3,  # Round 3 forward
         ]
         actual = [p.team_id for p in state.all_picks]
         assert actual == expected_team_order
 
     def test_empty_input_reprompts_cli(self):
         """Empty string input is ignored and the prompt re-appears."""
-        app, output = _make_cli_app([
-            "",
-            "",
-            "Josh Allen", "y",  # human pick 1
-            "1", "y",           # human pick 4
-            "1", "y",           # human pick 5
-        ])
+        app, output = _make_cli_app(
+            [
+                "",
+                "",
+                "Josh Allen",
+                "y",  # human pick 1
+                "1",
+                "y",  # human pick 4
+                "1",
+                "y",  # human pick 5
+            ]
+        )
         app._draft_loop()
         assert app.controller.is_complete
 
     def test_invalid_number_shows_error_not_crash(self):
         """Number outside displayed list shows an error, then can still pick."""
-        app, output = _make_cli_app([
-            "99",               # Out-of-range number with no displayed list
-            "Josh Allen", "y",  # Then pick normally
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "99",  # Out-of-range number with no displayed list
+                "Josh Allen",
+                "y",  # Then pick normally
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         # Rich highlights numbers with ANSI codes, so strip them before checking.
         clean = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
@@ -1350,12 +1575,17 @@ class TestEdgeCases:
         assert app.controller.is_complete
 
     def test_help_command_shows_all_commands(self):
-        app, output = _make_cli_app([
-            "h",
-            "Josh Allen", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "h",
+                "Josh Allen",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         # Verify key help commands appear (help uses "s <query>" not "search")
@@ -1364,12 +1594,17 @@ class TestEdgeCases:
 
     def test_available_position_filter_works(self):
         """'a qb' shows only QBs in the available list."""
-        app, output = _make_cli_app([
-            "a qb",
-            "Josh Allen", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "a qb",
+                "Josh Allen",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         assert "Available Players" in text
@@ -1378,13 +1613,18 @@ class TestEdgeCases:
 
     def test_roster_command_after_picks(self):
         """'r' after some picks shows the current (non-empty) roster."""
-        app, output = _make_cli_app([
-            "Josh Allen", "y",   # Pick 1: T0 drafts Josh Allen
-            # CPU picks 2, 3 automatically
-            "r",                  # Pick 4: view roster before picking
-            "1", "y",
-            "1", "y",            # Pick 5
-        ])
+        app, output = _make_cli_app(
+            [
+                "Josh Allen",
+                "y",  # Pick 1: T0 drafts Josh Allen
+                # CPU picks 2, 3 automatically
+                "r",  # Pick 4: view roster before picking
+                "1",
+                "y",
+                "1",
+                "y",  # Pick 5
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         assert "Roster" in text
@@ -1392,6 +1632,7 @@ class TestEdgeCases:
 
 
 # ── TestM11PickRecommender ────────────────────────────────────────────
+
 
 class TestM11PickRecommender:
     """M11: Pick Recommender integration within the MVP.
@@ -1405,11 +1646,14 @@ class TestM11PickRecommender:
 
     def test_recommend_picks_returns_list_of_recommendations(self):
         """recommend_picks() returns List[Recommendation] with correct count."""
-        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
-                                        n_k=4, n_dst=4)
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8, n_k=4, n_dst=4)
         config = LeagueConfig(
-            league_id="m11_test", league_size=4, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
+            league_id="m11_test",
+            league_size=4,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
             roster_slots=dict(STANDARD_ROSTER),
         )
         fresh_state = DraftState.create_new(
@@ -1428,11 +1672,14 @@ class TestM11PickRecommender:
 
     def test_recommendations_sorted_best_first(self):
         """Recommendations come in descending dynamic_vor order."""
-        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
-                                        n_k=4, n_dst=4)
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8, n_k=4, n_dst=4)
         config = LeagueConfig(
-            league_id="m11_sort", league_size=12, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
+            league_id="m11_sort",
+            league_size=12,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
             roster_slots=dict(STANDARD_ROSTER),
         )
         state = DraftState.create_new(
@@ -1450,11 +1697,14 @@ class TestM11PickRecommender:
 
     def test_each_recommendation_has_reasoning(self):
         """Every Recommendation carries a non-empty reasoning string."""
-        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
-                                        n_k=4, n_dst=4)
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8, n_k=4, n_dst=4)
         config = LeagueConfig(
-            league_id="m11_reason", league_size=12, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
+            league_id="m11_reason",
+            league_size=12,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
             roster_slots=dict(STANDARD_ROSTER),
         )
         state = DraftState.create_new(
@@ -1472,11 +1722,14 @@ class TestM11PickRecommender:
 
     def test_mid_draft_recommendations_reflect_team_state(self):
         """After several picks, recs reflect what the team still needs."""
-        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8,
-                                        n_k=4, n_dst=4)
+        player_data = _make_player_pool(n_qb=8, n_rb=16, n_wr=16, n_te=8, n_k=4, n_dst=4)
         config = LeagueConfig(
-            league_id="m11_mid", league_size=4, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
+            league_id="m11_mid",
+            league_size=4,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
             roster_slots=dict(STANDARD_ROSTER),
         )
         state = DraftState.create_new(
@@ -1494,9 +1747,11 @@ class TestM11PickRecommender:
             current_team = state.get_current_team()
             available = controller.get_available_players()
             from src.draft_manager.draft_rules import DraftRules
+
             rules = DraftRules(state)
-            legal = [p for p in available
-                     if rules.validate_pick(current_team.team_id, p["player_id"])[0]]
+            legal = [
+                p for p in available if rules.validate_pick(current_team.team_id, p["player_id"])[0]
+            ]
             pid = drafter.make_pick(state, legal, current_team.team_id)
             controller.make_pick(current_team.team_id, pid)
             if state.current_round > 1:
@@ -1504,8 +1759,7 @@ class TestM11PickRecommender:
 
         recommender = PickRecommender(vor_calculator=vor_calc)
         available = controller.get_available_players()
-        recs = recommender.recommend_picks(state, available, num_recommendations=5,
-                                           team_id=0)
+        recs = recommender.recommend_picks(state, available, num_recommendations=5, team_id=0)
         assert len(recs) > 0
         assert all(isinstance(r, Recommendation) for r in recs)
 
@@ -1513,12 +1767,16 @@ class TestM11PickRecommender:
     def test_real_data_recommendations_make_sense(self):
         """Using actual 2025 player data: top rec is a skill-position starter."""
         from src.draft_manager.draft_initializer import DraftInitializer
+
         initializer = DraftInitializer()
         state = initializer.create_draft(
-            league_size=12, scoring_format="half_ppr",
+            league_size=12,
+            scoring_format="half_ppr",
             roster_slots=dict(STANDARD_ROSTER),
-            team_names=[f"Team {i+1}" for i in range(12)],
-            human_team_id=0, draft_mode="simulation", data_year=2025,
+            team_names=[f"Team {i + 1}" for i in range(12)],
+            human_team_id=0,
+            draft_mode="simulation",
+            data_year=2025,
         )
         vor_calc = DynamicVORCalculator("half_ppr", league_size=12)
         recommender = PickRecommender(vor_calculator=vor_calc)
@@ -1538,47 +1796,65 @@ class TestM11PickRecommender:
 
     def test_rec_command_shows_recommendations_table(self):
         """'rec' command triggers display of a recommendations table."""
-        app, output = _make_cli_app([
-            "rec",           # Show recommendations
-            "1", "y",        # Pick #1 from list
-            "1", "y",        # Next human turn
-            "1", "y",        # Next human turn
-        ])
+        app, output = _make_cli_app(
+            [
+                "rec",  # Show recommendations
+                "1",
+                "y",  # Pick #1 from list
+                "1",
+                "y",  # Next human turn
+                "1",
+                "y",  # Next human turn
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         assert "Recommendations" in text
 
     def test_rec_command_shows_reasoning_column(self):
         """Recommendation table includes the 'Why' reasoning column header."""
-        app, output = _make_cli_app([
-            "rec",
-            "1", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_cli_app(
+            [
+                "rec",
+                "1",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         text = output.getvalue()
         assert "Why" in text
 
     def test_rec_command_pick_by_number_works(self):
         """After 'rec', user can pick by number from the displayed list."""
-        app, _ = _make_cli_app([
-            "rec",      # Display recommendations
-            "1", "y",   # Pick #1 from the rec list
-            "1", "y",
-            "1", "y",
-        ])
+        app, _ = _make_cli_app(
+            [
+                "rec",  # Display recommendations
+                "1",
+                "y",  # Pick #1 from the rec list
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
         app._draft_loop()
         assert app.controller.is_complete
 
     def test_recommender_initialised_in_init_components(self):
         """_init_components() creates a PickRecommender on the app."""
         app = DraftApp()
-        player_data = _make_player_pool(n_qb=4, n_rb=8, n_wr=8, n_te=4,
-                                        n_k=3, n_dst=3)
+        player_data = _make_player_pool(n_qb=4, n_rb=8, n_wr=8, n_te=4, n_k=3, n_dst=3)
         config = LeagueConfig(
-            league_id="init_test", league_size=4, scoring_format="half_ppr",
-            draft_type="snake", draft_mode="simulation", data_year=2025,
+            league_id="init_test",
+            league_size=4,
+            scoring_format="half_ppr",
+            draft_type="snake",
+            draft_mode="simulation",
+            data_year=2025,
             roster_slots=dict(STANDARD_ROSTER),
         )
         app.draft_state = DraftState.create_new(

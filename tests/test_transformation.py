@@ -7,12 +7,12 @@ Fixtures ``transformer``, ``cleaned_data``, ``merged_projections``, and
 import pandas as pd
 import pytest
 
-from src.data_pipeline.transformation import DataTransformer, UNRANKED_OVERALL
-
+from src.data_pipeline.transformation import UNRANKED_OVERALL, DataTransformer
 
 # ---------------------------------------------------------------------------
 # Merge projections
 # ---------------------------------------------------------------------------
+
 
 class TestMergeProjections:
     def test_all_positions_present(self, merged_projections):
@@ -33,8 +33,16 @@ class TestMergeProjections:
 
     def test_stat_columns_present(self, merged_projections):
         expected = [
-            "Pass_Att", "Pass_Yds", "Rush_Att", "Rush_Yds",
-            "Rec", "Rec_Yds", "FL", "FG", "FGA", "XPT",
+            "Pass_Att",
+            "Pass_Yds",
+            "Rush_Att",
+            "Rush_Yds",
+            "Rec",
+            "Rec_Yds",
+            "FL",
+            "FG",
+            "FGA",
+            "XPT",
         ]
         for col in expected:
             assert col in merged_projections.columns, f"Missing column: {col}"
@@ -71,6 +79,7 @@ class TestMergeProjections:
 # Scoring variants
 # ---------------------------------------------------------------------------
 
+
 class TestScoringVariants:
     def test_adds_three_columns(self, transformer, merged_projections):
         result = transformer.calculate_scoring_variants(merged_projections)
@@ -80,9 +89,7 @@ class TestScoringVariants:
 
     def test_full_ppr_equals_fpts(self, transformer, merged_projections):
         result = transformer.calculate_scoring_variants(merged_projections)
-        pd.testing.assert_series_equal(
-            result["FPTS_FullPPR"], result["FPTS"], check_names=False
-        )
+        pd.testing.assert_series_equal(result["FPTS_FullPPR"], result["FPTS"], check_names=False)
 
     def test_standard_less_than_full_ppr_for_receivers(self, transformer, merged_projections):
         result = transformer.calculate_scoring_variants(merged_projections)
@@ -108,22 +115,19 @@ class TestScoringVariants:
         """FPTS_Standard = FPTS - Rec (remove full PPR bonus)."""
         result = transformer.calculate_scoring_variants(merged_projections)
         expected = result["FPTS"] - result["Rec"]
-        pd.testing.assert_series_equal(
-            result["FPTS_Standard"], expected, check_names=False
-        )
+        pd.testing.assert_series_equal(result["FPTS_Standard"], expected, check_names=False)
 
     def test_half_ppr_formula(self, transformer, merged_projections):
         """FPTS_HalfPPR = FPTS - (Rec * 0.5)."""
         result = transformer.calculate_scoring_variants(merged_projections)
         expected = result["FPTS"] - (result["Rec"] * 0.5)
-        pd.testing.assert_series_equal(
-            result["FPTS_HalfPPR"], expected, check_names=False
-        )
+        pd.testing.assert_series_equal(result["FPTS_HalfPPR"], expected, check_names=False)
 
 
 # ---------------------------------------------------------------------------
 # Merge with rankings
 # ---------------------------------------------------------------------------
+
 
 class TestMergeWithRankings:
     def test_adds_overall_rank(self, transformer, projections_with_scoring, cleaned_data):
@@ -143,7 +147,9 @@ class TestMergeWithRankings:
         # Some players should have real ranks (not the unranked sentinel)
         assert (result["Overall_Rank"] < UNRANKED_OVERALL).any()
 
-    def test_unranked_players_get_sentinel(self, transformer, projections_with_scoring, cleaned_data):
+    def test_unranked_players_get_sentinel(
+        self, transformer, projections_with_scoring, cleaned_data
+    ):
         result = transformer.merge_with_rankings(projections_with_scoring, cleaned_data["rankings"])
         # Some fringe players won't be in rankings
         assert (result["Overall_Rank"] == UNRANKED_OVERALL).any()
@@ -157,6 +163,7 @@ class TestMergeWithRankings:
 # ---------------------------------------------------------------------------
 # Player IDs
 # ---------------------------------------------------------------------------
+
 
 class TestGeneratePlayerIds:
     def test_adds_player_id_column(self, transformer, merged_projections):
@@ -191,6 +198,7 @@ class TestGeneratePlayerIds:
 # Full transform pipeline
 # ---------------------------------------------------------------------------
 
+
 class TestFullTransform:
     def test_end_to_end(self, transformer, cleaned_data):
         result = transformer.transform(cleaned_data)
@@ -198,8 +206,13 @@ class TestFullTransform:
 
         # Has all expected columns
         for col in [
-            "Player", "Position", "FPTS_Standard", "FPTS_HalfPPR",
-            "FPTS_FullPPR", "Overall_Rank", "player_id",
+            "Player",
+            "Position",
+            "FPTS_Standard",
+            "FPTS_HalfPPR",
+            "FPTS_FullPPR",
+            "Overall_Rank",
+            "player_id",
         ]:
             assert col in result.columns, f"Missing column: {col}"
 
@@ -228,6 +241,7 @@ class TestFullTransform:
 # ---------------------------------------------------------------------------
 # _safe_float edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestSafeFloat:
     def test_none_returns_default(self):

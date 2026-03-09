@@ -94,9 +94,7 @@ class ComputerDrafter:
         if not available_players:
             raise ValueError("No available players to pick from")
 
-        vor_results = self.vor_calculator.calculate_from_draft_state(
-            draft_state, team_id
-        )
+        vor_results = self.vor_calculator.calculate_from_draft_state(draft_state, team_id)
         scores = self._compute_blended_scores(available_players, vor_results)
 
         if not scores:
@@ -135,9 +133,7 @@ class ComputerDrafter:
         # Re-rank VOR among only available players so the rank is always in
         # [1, total] and vor_score stays in [0, 1].
         available_ids = {p["player_id"] for p in available_players}
-        available_vor = {
-            pid: vor_results[pid] for pid in available_ids if pid in vor_results
-        }
+        available_vor = {pid: vor_results[pid] for pid in available_ids if pid in vor_results}
         vor_rank_map = self._rank_by_vor(available_vor)
 
         # Re-rank ADP among available players for the same reason.  Global ECR
@@ -147,10 +143,7 @@ class ComputerDrafter:
             available_players,
             key=lambda p: p.get("overall_rank") or float("inf"),
         )
-        adp_rank_map = {
-            p["player_id"]: rank
-            for rank, p in enumerate(sorted_by_adp, start=1)
-        }
+        adp_rank_map = {p["player_id"]: rank for rank, p in enumerate(sorted_by_adp, start=1)}
 
         scores: Dict[str, float] = {}
         for player in available_players:
@@ -162,10 +155,7 @@ class ComputerDrafter:
             adp_rank = adp_rank_map.get(pid, total)
             adp_score = 1.0 - (adp_rank - 1) / total
 
-            composite = (
-                (1.0 - self.adp_weight) * vor_score
-                + self.adp_weight * adp_score
-            )
+            composite = (1.0 - self.adp_weight) * vor_score + self.adp_weight * adp_score
 
             # contrarian: add uniform noise to exploit ADP inefficiencies
             if self.noise_factor > 0:

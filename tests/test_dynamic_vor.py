@@ -6,16 +6,15 @@ from src.data_pipeline.config import calculate_baseline_count
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.simulation_engine.config import (
-    POSITION_SCARCITY_WEIGHTS,
-    ROSTER_NEED_WEIGHT,
-    ROSTER_FILLED_PENALTY,
-    ROSTER_EXCESS_PENALTY,
     NEED_NORMALIZATION,
+    POSITION_SCARCITY_WEIGHTS,
+    ROSTER_EXCESS_PENALTY,
+    ROSTER_FILLED_PENALTY,
+    ROSTER_NEED_WEIGHT,
     TIER_URGENCY_WEIGHT,
 )
 from src.simulation_engine.models import VORResult
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -29,8 +28,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -62,22 +67,38 @@ def _make_player_data():
     players = {}
     specs = [
         # (id, position, half_ppr VOR)
-        ("qb1", "QB", 40.0), ("qb2", "QB", 30.0),
-        ("qb3", "QB", 15.0), ("qb4", "QB", 5.0),
-        ("rb1", "RB", 50.0), ("rb2", "RB", 45.0),
-        ("rb3", "RB", 35.0), ("rb4", "RB", 25.0),
-        ("rb5", "RB", 15.0), ("rb6", "RB", 10.0),
-        ("rb7", "RB", 5.0), ("rb8", "RB", 2.0),
-        ("wr1", "WR", 48.0), ("wr2", "WR", 42.0),
-        ("wr3", "WR", 30.0), ("wr4", "WR", 20.0),
-        ("wr5", "WR", 12.0), ("wr6", "WR", 8.0),
-        ("wr7", "WR", 4.0), ("wr8", "WR", 1.0),
-        ("te1", "TE", 35.0), ("te2", "TE", 20.0),
-        ("te3", "TE", 10.0), ("te4", "TE", 3.0),
-        ("k1", "K", 8.0), ("k2", "K", 5.0),
-        ("k3", "K", 2.0), ("k4", "K", 1.0),
-        ("dst1", "DST", 10.0), ("dst2", "DST", 6.0),
-        ("dst3", "DST", 3.0), ("dst4", "DST", 1.0),
+        ("qb1", "QB", 40.0),
+        ("qb2", "QB", 30.0),
+        ("qb3", "QB", 15.0),
+        ("qb4", "QB", 5.0),
+        ("rb1", "RB", 50.0),
+        ("rb2", "RB", 45.0),
+        ("rb3", "RB", 35.0),
+        ("rb4", "RB", 25.0),
+        ("rb5", "RB", 15.0),
+        ("rb6", "RB", 10.0),
+        ("rb7", "RB", 5.0),
+        ("rb8", "RB", 2.0),
+        ("wr1", "WR", 48.0),
+        ("wr2", "WR", 42.0),
+        ("wr3", "WR", 30.0),
+        ("wr4", "WR", 20.0),
+        ("wr5", "WR", 12.0),
+        ("wr6", "WR", 8.0),
+        ("wr7", "WR", 4.0),
+        ("wr8", "WR", 1.0),
+        ("te1", "TE", 35.0),
+        ("te2", "TE", 20.0),
+        ("te3", "TE", 10.0),
+        ("te4", "TE", 3.0),
+        ("k1", "K", 8.0),
+        ("k2", "K", 5.0),
+        ("k3", "K", 2.0),
+        ("k4", "K", 1.0),
+        ("dst1", "DST", 10.0),
+        ("dst2", "DST", 6.0),
+        ("dst3", "DST", 3.0),
+        ("dst4", "DST", 1.0),
     ]
     for pid, pos, vor in specs:
         players[pid] = _make_player(pid, pos, vor_half_ppr=vor)
@@ -97,8 +118,14 @@ def _make_draft_state(league_size=4, **config_overrides):
 
 
 DEFAULT_ROSTER_SLOTS = {
-    "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-    "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+    "QB": 1,
+    "RB": 2,
+    "WR": 2,
+    "TE": 1,
+    "FLEX": 1,
+    "DST": 1,
+    "K": 1,
+    "BENCH": 6,
 }
 
 
@@ -698,19 +725,19 @@ class TestCalculateFromDraftState:
         controller = DraftController(state)
 
         # Fill Team 0's RB slots: 2 RB + 1 FLEX
-        controller.make_pick(0, "rb1")   # Team 0 picks (RB slot)
-        controller.make_pick(1, "wr1")   # Team 1
-        controller.make_pick(2, "qb1")   # Team 2
-        controller.make_pick(3, "te1")   # Team 3
+        controller.make_pick(0, "rb1")  # Team 0 picks (RB slot)
+        controller.make_pick(1, "wr1")  # Team 1
+        controller.make_pick(2, "qb1")  # Team 2
+        controller.make_pick(3, "te1")  # Team 3
 
         # Round 2 (snake: 3,2,1,0)
         controller.make_pick(3, "wr2")
         controller.make_pick(2, "rb2")
         controller.make_pick(1, "qb2")
-        controller.make_pick(0, "rb3")   # Team 0's second RB (fills RB2)
+        controller.make_pick(0, "rb3")  # Team 0's second RB (fills RB2)
 
         # Round 3 (1,2,3,4)
-        controller.make_pick(0, "rb4")   # Team 0 → goes to FLEX slot
+        controller.make_pick(0, "rb4")  # Team 0 → goes to FLEX slot
 
         result = self.calc.calculate_from_draft_state(state, team_id=0)
 
@@ -832,10 +859,22 @@ class TestFormulaVerification:
                     expected = -5.0
                 else:
                     position_value_penalty = 0.50
-                    expected = vor.base_vor * vor.scarcity_multiplier * vor.need_multiplier * uncertainty_adj * position_value_penalty
+                    expected = (
+                        vor.base_vor
+                        * vor.scarcity_multiplier
+                        * vor.need_multiplier
+                        * uncertainty_adj
+                        * position_value_penalty
+                    )
             else:
                 # Skill positions: base * scarcity * need * uncertainty * tier_urgency
-                expected = vor.base_vor * vor.scarcity_multiplier * vor.need_multiplier * uncertainty_adj * tier_urgency
+                expected = (
+                    vor.base_vor
+                    * vor.scarcity_multiplier
+                    * vor.need_multiplier
+                    * uncertainty_adj
+                    * tier_urgency
+                )
 
             assert vor.dynamic_vor == pytest.approx(expected, rel=1e-4)
 
@@ -860,8 +899,12 @@ class TestBenchDepthPenalty:
 
         # Build player_positions mapping
         player_positions = {
-            "wr1": "WR", "wr2": "WR", "wr3": "WR",
-            "wr4": "WR", "wr5": "WR", "wr6": "WR",
+            "wr1": "WR",
+            "wr2": "WR",
+            "wr3": "WR",
+            "wr4": "WR",
+            "wr5": "WR",
+            "wr6": "WR",
         }
 
         result = self.calc.calculate_dynamic_vor(
@@ -890,7 +933,11 @@ class TestBenchDepthPenalty:
         roster["BENCH"] = ["rb3", "rb4", "rb5"]  # 3 RBs on bench
 
         player_positions = {
-            "rb1": "RB", "rb2": "RB", "rb3": "RB", "rb4": "RB", "rb5": "RB",
+            "rb1": "RB",
+            "rb2": "RB",
+            "rb3": "RB",
+            "rb4": "RB",
+            "rb5": "RB",
         }
 
         result = self.calc.calculate_dynamic_vor(
@@ -917,7 +964,10 @@ class TestBenchDepthPenalty:
         roster["BENCH"] = ["k2", "k3", "k4"]  # 3 Ks on bench (excessive!)
 
         player_positions = {
-            "k1": "K", "k2": "K", "k3": "K", "k4": "K",
+            "k1": "K",
+            "k2": "K",
+            "k3": "K",
+            "k4": "K",
         }
 
         result = self.calc.calculate_dynamic_vor(
@@ -945,7 +995,10 @@ class TestBenchDepthPenalty:
         roster["BENCH"] = ["wr2", "rb1", "qb1"]  # 1 WR + 1 RB + 1 QB on bench
 
         player_positions = {
-            "wr1": "WR", "wr2": "WR", "rb1": "RB", "qb1": "QB",
+            "wr1": "WR",
+            "wr2": "WR",
+            "rb1": "RB",
+            "qb1": "QB",
         }
 
         result = self.calc.calculate_dynamic_vor(
@@ -979,7 +1032,11 @@ class TestBenchDepthPenalty:
 
         player_positions_k = {"k1": "K", "k2": "K", "k3": "K"}
         player_positions_rb = {
-            "rb1": "RB", "rb2": "RB", "rb3": "RB", "rb4": "RB", "rb5": "RB"
+            "rb1": "RB",
+            "rb2": "RB",
+            "rb3": "RB",
+            "rb4": "RB",
+            "rb5": "RB",
         }
 
         result_k = self.calc.calculate_dynamic_vor(
@@ -1018,7 +1075,10 @@ class TestBenchDepthPenalty:
         roster = {pos: [] for pos in DEFAULT_ROSTER_SLOTS}
         roster["WR"] = ["wr1", "wr2"]  # 2 WRs in WR slots
         roster["FLEX"] = ["wr3"]  # 1 WR in FLEX (fallback assumes this is a WR)
-        roster["BENCH"] = ["wr4", "wr5"]  # These won't be counted without player_positions
+        roster["BENCH"] = [
+            "wr4",
+            "wr5",
+        ]  # These won't be counted without player_positions
 
         # Call WITHOUT player_positions parameter
         result = self.calc.calculate_dynamic_vor(

@@ -10,15 +10,15 @@ from typing import Dict, List, Optional
 
 from src.data_pipeline.config import calculate_baseline_count
 from src.simulation_engine.config import (
-    POSITION_SCARCITY_WEIGHTS,
-    ROSTER_NEED_WEIGHT,
-    ROSTER_FILLED_PENALTY,
-    ROSTER_EXCESS_PENALTY,
-    NEED_NORMALIZATION,
-    POSITION_HARD_CAPS,
-    POSITION_UNCERTAINTY,
     EARLY_ROUND_THRESHOLD,
     LATE_ROUND_THRESHOLD,
+    NEED_NORMALIZATION,
+    POSITION_HARD_CAPS,
+    POSITION_SCARCITY_WEIGHTS,
+    POSITION_UNCERTAINTY,
+    ROSTER_EXCESS_PENALTY,
+    ROSTER_FILLED_PENALTY,
+    ROSTER_NEED_WEIGHT,
     TIER_GAP_THRESHOLD,
     TIER_URGENCY_WEIGHT,
 )
@@ -130,9 +130,7 @@ class DynamicVORCalculator:
 
             # Apply uncertainty adjustment based on round
             uncertainty = POSITION_UNCERTAINTY.get(position, 0.5)
-            uncertainty_adj = self._calculate_uncertainty_adjustment(
-                uncertainty, current_round
-            )
+            uncertainty_adj = self._calculate_uncertainty_adjustment(uncertainty, current_round)
 
             # K/DST "streaming penalty" - if starting slot already filled, make bench K/DST worthless
             if position in ("K", "DST"):
@@ -142,7 +140,9 @@ class DynamicVORCalculator:
                 else:
                     # Use draft completion percentage to ensure consistent behavior across league sizes
                     total_picks = sum(roster_slots.values()) * self.league_size
-                    picks_made_approx = (current_round - 1) * self.league_size + (self.league_size // 2)
+                    picks_made_approx = (current_round - 1) * self.league_size + (
+                        self.league_size // 2
+                    )
                     draft_pct_complete = picks_made_approx / total_picks if total_picks > 0 else 0.0
 
                     if draft_pct_complete < 0.65:
@@ -151,7 +151,9 @@ class DynamicVORCalculator:
                         dynamic_vor = -5.0
                     else:
                         position_value_penalty = 0.50
-                        dynamic_vor = base_vor * scarcity * need * uncertainty_adj * position_value_penalty
+                        dynamic_vor = (
+                            base_vor * scarcity * need * uncertainty_adj * position_value_penalty
+                        )
             else:
                 # Skill positions: dynamic_vor = base_vor * scarcity * need * uncertainty * tier_urgency
                 dynamic_vor = base_vor * scarcity * need * uncertainty_adj * tier_urgency
@@ -191,8 +193,7 @@ class DynamicVORCalculator:
             Dict mapping ``player_id`` to :class:`VORResult`.
         """
         available_players = [
-            draft_state.get_player_info(pid)
-            for pid in draft_state.available_players
+            draft_state.get_player_info(pid) for pid in draft_state.available_players
         ]
 
         # Count drafted players by position across all teams.
@@ -209,21 +210,18 @@ class DynamicVORCalculator:
                         if not player_info or "position" not in player_info:
                             logger.warning(
                                 "Could not determine position for player %s in %s slot",
-                                pid, slot,
+                                pid,
+                                slot,
                             )
                             continue
                         position = player_info["position"]
                         player_positions[pid] = position
-                        drafted_positions[position] = (
-                            drafted_positions.get(position, 0) + 1
-                        )
+                        drafted_positions[position] = drafted_positions.get(position, 0) + 1
                 else:
                     # Position-specific slot (QB, RB, WR, TE, K, DST)
                     for pid in player_ids:
                         player_positions[pid] = slot
-                    drafted_positions[slot] = (
-                        drafted_positions.get(slot, 0) + len(player_ids)
-                    )
+                    drafted_positions[slot] = drafted_positions.get(slot, 0) + len(player_ids)
 
         roster_slots = draft_state.league_config.roster_slots
         team_roster = draft_state.get_team(team_id).roster
@@ -440,9 +438,11 @@ class DynamicVORCalculator:
                 tier_gap = 0.0
                 idx = rank - 1  # 0-based index
                 if idx < len(sorted_players) - 1:
-                    next_vor = sorted_players[idx + 1].get(
-                        "baseline_vor", {}
-                    ).get(self.scoring_format, 0.0)
+                    next_vor = (
+                        sorted_players[idx + 1]
+                        .get("baseline_vor", {})
+                        .get(self.scoring_format, 0.0)
+                    )
                     if current_vor > 0:
                         drop = (current_vor - next_vor) / current_vor
                         if drop > TIER_GAP_THRESHOLD:
@@ -544,9 +544,9 @@ class DynamicVORCalculator:
                 is_boundary = False
                 tier_gap = 0.0
                 if i < len(sorted_players) - 1:
-                    next_vor = sorted_players[i + 1].get(
-                        "baseline_vor", {}
-                    ).get(self.scoring_format, 0.0)
+                    next_vor = (
+                        sorted_players[i + 1].get("baseline_vor", {}).get(self.scoring_format, 0.0)
+                    )
                     if current_vor > 0:
                         drop = (current_vor - next_vor) / current_vor
                         if drop > TIER_GAP_THRESHOLD:
