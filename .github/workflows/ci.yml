@@ -36,6 +36,9 @@ jobs:
       - name: Format check (ruff)
         run: ruff format --check src/ tests/
 
+      - name: Generate player data
+        run: python -m src.data_pipeline.run_update
+
       - name: Tests with coverage
         run: |
           pytest tests/ \
