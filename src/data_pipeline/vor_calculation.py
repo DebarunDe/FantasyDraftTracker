@@ -70,21 +70,23 @@ class VORCalculator:
                 # Average ±1 rank for robustness (Petersen methodology)
                 repl_low = max(0, repl_idx - 1)
                 repl_high = min(len(pos_df) - 1, repl_idx + 1)
-                replacement_fpts = pos_df.iloc[repl_low:repl_high + 1][fpts_col].mean()
+                replacement_fpts = pos_df.iloc[repl_low : repl_high + 1][fpts_col].mean()
 
-                out.loc[pos_mask, vor_col] = (
-                    out.loc[pos_mask, fpts_col] - replacement_fpts
-                )
+                out.loc[pos_mask, vor_col] = out.loc[pos_mask, fpts_col] - replacement_fpts
 
                 logger.debug(
                     "VOR %s %s: replacement=#%d (%.1f pts avg), range=[%.1f, %.1f]",
-                    fmt, position, repl_idx + 1, replacement_fpts,
+                    fmt,
+                    position,
+                    repl_idx + 1,
+                    replacement_fpts,
                     out.loc[pos_mask, vor_col].max(),
                     out.loc[pos_mask, vor_col].min(),
                 )
 
         logger.info(
             "Calculated baseline VOR for %d players (%d-team league)",
-            len(out), league_size,
+            len(out),
+            league_size,
         )
         return out

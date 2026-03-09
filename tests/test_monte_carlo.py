@@ -20,7 +20,7 @@ from typing import Dict
 import numpy as np
 import pytest
 
-from src.draft_manager.draft_state import DraftState, LeagueConfig, TeamRoster
+from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.simulation_engine.config import CANDIDATE_POOL_SIZE, POSITION_HARD_CAPS
 from src.simulation_engine.models import Recommendation
 from src.simulation_engine.monte_carlo import (
@@ -31,12 +31,17 @@ from src.simulation_engine.monte_carlo import (
 from src.simulation_engine.pick_recommender import PickRecommender
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
-
 # ── Fixtures & shared helpers ─────────────────────────────────────────
 
 STANDARD_ROSTER = {
-    "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-    "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+    "QB": 1,
+    "RB": 2,
+    "WR": 2,
+    "TE": 1,
+    "FLEX": 1,
+    "DST": 1,
+    "K": 1,
+    "BENCH": 6,
 }
 
 
@@ -52,8 +57,12 @@ def _make_player_pool(
     players: Dict[str, Dict] = {}
     rank = 1
     for pos, count in [
-        ("QB", n_qb), ("RB", n_rb), ("WR", n_wr),
-        ("TE", n_te), ("K", n_k), ("DST", n_dst),
+        ("QB", n_qb),
+        ("RB", n_rb),
+        ("WR", n_wr),
+        ("TE", n_te),
+        ("K", n_k),
+        ("DST", n_dst),
     ]:
         for i in range(1, count + 1):
             pid = f"{pos.lower()}{i}"
@@ -123,6 +132,7 @@ def _make_simulator(
 
 # ── _get_team_for_pick ────────────────────────────────────────────────
 
+
 class TestGetTeamForPick:
     """Snake-draft team assignment sanity checks (2D draft_order)."""
 
@@ -164,6 +174,7 @@ class TestGetTeamForPick:
 
 # ── _score_team ───────────────────────────────────────────────────────
 
+
 def _proj(player_data: dict, scoring_format: str) -> dict:
     """Build projections_lookup from player_data for the given scoring format."""
     return {
@@ -192,8 +203,10 @@ class TestScoreTeam:
     def test_bench_does_not_count(self):
         """With 3 RBs and only 2 RB slots + 1 FLEX, the 3rd RB fills FLEX (not bench)."""
         # rb1=190, rb2=180, rb3=170  (200 - i*10 for i in 1,2,3)
-        player_data = {f"rb{i}": {"projections": {"half_ppr": 200.0 - i * 10}, "position": "RB"}
-                       for i in range(1, 4)}
+        player_data = {
+            f"rb{i}": {"projections": {"half_ppr": 200.0 - i * 10}, "position": "RB"}
+            for i in range(1, 4)
+        }
         picks = [(f"rb{i}", "RB") for i in range(1, 4)]
         score = _score_team(picks, _proj(player_data, "half_ppr"), STANDARD_ROSTER)
         # 2 RB slots + 1 FLEX = 3 starters; rb1(190) + rb2(180) + rb3(170-FLEX) = 540
@@ -209,8 +222,10 @@ class TestScoreTeam:
             "te1": {"projections": {"half_ppr": 120.0}, "position": "TE"},
         }
         picks = [
-            ("rb1", "RB"), ("rb2", "RB"),
-            ("wr1", "WR"), ("wr2", "WR"),
+            ("rb1", "RB"),
+            ("rb2", "RB"),
+            ("wr1", "WR"),
+            ("wr2", "WR"),
             ("te1", "TE"),
         ]
         score = _score_team(picks, _proj(player_data, "half_ppr"), STANDARD_ROSTER)
@@ -244,11 +259,16 @@ class TestScoreTeam:
             }
         }
         picks = [("qb1", "QB")]
-        assert _score_team(picks, _proj(player_data, "standard"), STANDARD_ROSTER) == pytest.approx(100.0)
-        assert _score_team(picks, _proj(player_data, "full_ppr"), STANDARD_ROSTER) == pytest.approx(300.0)
+        assert _score_team(picks, _proj(player_data, "standard"), STANDARD_ROSTER) == pytest.approx(
+            100.0
+        )
+        assert _score_team(picks, _proj(player_data, "full_ppr"), STANDARD_ROSTER) == pytest.approx(
+            300.0
+        )
 
 
 # ── MonteCarloSimulator.evaluate_candidates ───────────────────────────
+
 
 class TestEvaluateCandidates:
     """Core MC evaluation logic."""
@@ -351,6 +371,7 @@ class TestEvaluateCandidates:
 
 # ── Hard-cap enforcement ──────────────────────────────────────────────
 
+
 class TestHardCaps:
     """Verify simulation respects POSITION_HARD_CAPS."""
 
@@ -366,8 +387,9 @@ class TestHardCaps:
         vor_sorted = MonteCarloSimulator._build_vor_sorted(available_ids, vor_results)
         adp_sorted = MonteCarloSimulator._build_adp_sorted(available_ids, player_data)
         base_counts = MonteCarloSimulator._extract_team_pos_counts(state)
-        proj_lookup = {pid: d.get("projections", {}).get("half_ppr", 0.0)
-                       for pid, d in player_data.items()}
+        proj_lookup = {
+            pid: d.get("projections", {}).get("half_ppr", 0.0) for pid, d in player_data.items()
+        }
         rng = np.random.default_rng(42)
 
         for _ in range(10):
@@ -406,8 +428,9 @@ class TestHardCaps:
         vor_sorted = MonteCarloSimulator._build_vor_sorted(available_ids, vor_results)
         adp_sorted = MonteCarloSimulator._build_adp_sorted(available_ids, player_data)
         base_counts = MonteCarloSimulator._extract_team_pos_counts(state)
-        proj_lookup = {pid: d.get("projections", {}).get("half_ppr", 0.0)
-                       for pid, d in player_data.items()}
+        proj_lookup = {
+            pid: d.get("projections", {}).get("half_ppr", 0.0) for pid, d in player_data.items()
+        }
 
         # Run simulation; if hard cap works correctly this should not crash and
         # should return a finite non-negative score.
@@ -434,6 +457,7 @@ class TestHardCaps:
 
 # ── PickRecommender integration ───────────────────────────────────────
 
+
 class TestPickRecommenderWithMC:
     """Verify MC is correctly wired into PickRecommender."""
 
@@ -446,9 +470,7 @@ class TestPickRecommenderWithMC:
         state = _make_draft_state()
         recommender, _ = self._make_recommender()
         available = [state.player_data[pid] for pid in state.available_players[:30]]
-        recs = recommender.recommend_picks(
-            state, available, num_recommendations=5
-        )
+        recs = recommender.recommend_picks(state, available, num_recommendations=5)
         assert len(recs) == 5
         for rec in recs:
             assert isinstance(rec, Recommendation)
@@ -529,9 +551,11 @@ class TestPickRecommenderWithMC:
 
 # ── Performance ───────────────────────────────────────────────────────
 
+
 class TestPerformance:
     """MC simulation must complete in < 2 seconds per M13 success criteria."""
 
+    @pytest.mark.slow
     def test_evaluate_candidates_under_2_seconds_round1(self):
         """Early round (depth=5) with CANDIDATE_POOL_SIZE candidates."""
         player_data = _make_player_pool(n_qb=12, n_rb=30, n_wr=30, n_te=12, n_k=8, n_dst=8)
@@ -539,9 +563,7 @@ class TestPerformance:
         sim = _make_simulator()
 
         # Use top CANDIDATE_POOL_SIZE players by overall_rank as candidates
-        sorted_pids = sorted(
-            player_data, key=lambda pid: player_data[pid]["overall_rank"]
-        )
+        sorted_pids = sorted(player_data, key=lambda pid: player_data[pid]["overall_rank"])
         candidates = [player_data[pid] for pid in sorted_pids[:CANDIDATE_POOL_SIZE]]
 
         start = time.perf_counter()
@@ -557,9 +579,7 @@ class TestPerformance:
         state = _make_draft_state(current_round=10, player_data=player_data)
         sim = _make_simulator()
 
-        sorted_pids = sorted(
-            player_data, key=lambda pid: player_data[pid]["overall_rank"]
-        )
+        sorted_pids = sorted(player_data, key=lambda pid: player_data[pid]["overall_rank"])
         candidates = [player_data[pid] for pid in sorted_pids[:CANDIDATE_POOL_SIZE]]
 
         start = time.perf_counter()
@@ -571,6 +591,7 @@ class TestPerformance:
 
 
 # ── Simulation state isolation ────────────────────────────────────────
+
 
 class TestSimulationIsolation:
     """Simulations should not mutate the input DraftState."""
@@ -594,6 +615,7 @@ class TestSimulationIsolation:
 
 
 # ── Stochasticity ─────────────────────────────────────────────────────
+
 
 class TestStochasticity:
     """Verify that simulations are genuinely stochastic."""
@@ -619,8 +641,9 @@ class TestStochasticity:
             state, player_data
         )
         rng = np.random.default_rng(42)
-        proj_lookup = {pid: d.get("projections", {}).get("half_ppr", 0.0)
-                       for pid, d in player_data.items()}
+        proj_lookup = {
+            pid: d.get("projections", {}).get("half_ppr", 0.0) for pid, d in player_data.items()
+        }
 
         scores = [
             sim._simulate_single(

@@ -87,9 +87,7 @@ class StatePersistence:
         if active_link.is_symlink():
             actual_file = active_link.resolve()
             if not actual_file.exists():
-                logger.warning(
-                    "Active draft symlink points to missing file: %s", actual_file
-                )
+                logger.warning("Active draft symlink points to missing file: %s", actual_file)
                 return None
 
             with open(actual_file, "r", encoding="utf-8") as f:
@@ -125,12 +123,8 @@ class StatePersistence:
                         "is_complete": data.get("is_complete", False),
                         "current_round": data.get("current_round", 1),
                         "current_pick": data.get("current_pick", 1),
-                        "league_size": data.get("league_config", {}).get(
-                            "league_size", 0
-                        ),
-                        "scoring_format": data.get("league_config", {}).get(
-                            "scoring_format", ""
-                        ),
+                        "league_size": data.get("league_config", {}).get("league_size", 0),
+                        "scoring_format": data.get("league_config", {}).get("scoring_format", ""),
                     }
                 )
             except (json.JSONDecodeError, OSError, KeyError) as e:
@@ -256,8 +250,7 @@ class StatePersistence:
         # produce anyway, so nothing is discarded.
         if raw_order and not isinstance(raw_order[0], list):
             logger.warning(
-                "Draft %s has old 1D draft_order format; "
-                "converting to 2D snake order",
+                "Draft %s has old 1D draft_order format; converting to 2D snake order",
                 data["draft_id"],
             )
             raw_order = DraftState._generate_snake_order(

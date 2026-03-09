@@ -27,8 +27,14 @@ from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
 # Standard 15-slot roster used across all benchmarks
 STANDARD_ROSTER = {
-    "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-    "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+    "QB": 1,
+    "RB": 2,
+    "WR": 2,
+    "TE": 1,
+    "FLEX": 1,
+    "DST": 1,
+    "K": 1,
+    "BENCH": 6,
 }
 
 
@@ -81,9 +87,7 @@ def vor_calc():
 
 @pytest.fixture(scope="module")
 def mc_sim(vor_calc):
-    return MonteCarloSimulator(
-        vor_calculator=vor_calc, scoring_format="half_ppr", league_size=12
-    )
+    return MonteCarloSimulator(vor_calculator=vor_calc, scoring_format="half_ppr", league_size=12)
 
 
 # ── M14 Benchmark: Pick validation < 10 ms ────────────────────────────
@@ -101,9 +105,7 @@ class TestPickValidationPerformance:
         elapsed = time.perf_counter() - start
 
         assert is_valid
-        assert elapsed < 0.010, (
-            f"Pick validation took {elapsed * 1000:.1f} ms — target <10 ms"
-        )
+        assert elapsed < 0.010, f"Pick validation took {elapsed * 1000:.1f} ms — target <10 ms"
 
     def test_invalid_pick_under_10ms(self, draft_state_round1):
         """Rejection path (wrong team turn) must also be fast."""
@@ -157,8 +159,7 @@ class TestSimpleRecommendationPerformance:
     def test_simple_rec_round1_under_500ms(self, draft_state_round1, vor_calc):
         recommender = PickRecommender(vor_calculator=vor_calc, mc_simulator=None)
         available = [
-            draft_state_round1.get_player_info(pid)
-            for pid in draft_state_round1.available_players
+            draft_state_round1.get_player_info(pid) for pid in draft_state_round1.available_players
         ]
 
         start = time.perf_counter()
@@ -201,11 +202,11 @@ class TestSimpleRecommendationPerformance:
 class TestMonteCarloPerformance:
     """Full MC recommendation (200 sims × 15 candidates) must complete in <2 s."""
 
+    @pytest.mark.slow
     def test_mc_rec_round1_under_2s(self, draft_state_round1, vor_calc, mc_sim):
         recommender = PickRecommender(vor_calculator=vor_calc, mc_simulator=mc_sim)
         available = [
-            draft_state_round1.get_player_info(pid)
-            for pid in draft_state_round1.available_players
+            draft_state_round1.get_player_info(pid) for pid in draft_state_round1.available_players
         ]
 
         start = time.perf_counter()
@@ -217,9 +218,7 @@ class TestMonteCarloPerformance:
         elapsed = time.perf_counter() - start
 
         assert len(recs) > 0
-        assert elapsed < 2.0, (
-            f"MC recommendation (round 1) took {elapsed:.2f} s — target <2.0 s"
-        )
+        assert elapsed < 2.0, f"MC recommendation (round 1) took {elapsed:.2f} s — target <2.0 s"
 
     def test_mc_rec_round10_under_2s(self, draft_state_round10, vor_calc, mc_sim):
         """Late-round MC uses shorter depth (2 rounds) so must be well under target."""
@@ -238,6 +237,4 @@ class TestMonteCarloPerformance:
         elapsed = time.perf_counter() - start
 
         assert len(recs) > 0
-        assert elapsed < 2.0, (
-            f"MC recommendation (round 10) took {elapsed:.2f} s — target <2.0 s"
-        )
+        assert elapsed < 2.0, f"MC recommendation (round 10) took {elapsed:.2f} s — target <2.0 s"

@@ -5,7 +5,6 @@ import pytest
 
 from src.data_pipeline.config import VOR_BASELINE_COUNTS
 
-
 # ── Synthetic data helpers ────────────────────────────────────────────
 
 
@@ -20,17 +19,19 @@ def _make_players(position: str, count: int, base_fpts: float = 200.0):
     for i in range(count):
         rec = (60 - i) if position in ("WR", "RB", "TE") else 0
         fpts = base_fpts - i * 5  # Full PPR
-        rows.append({
-            "Player": f"{position}_Player_{i}",
-            "Player_Norm": f"{position.lower()}_player_{i}",
-            "Team_Abbr": "TST",
-            "Position": position,
-            "FPTS": fpts,
-            "Rec": rec,
-            "FPTS_FullPPR": fpts,
-            "FPTS_HalfPPR": fpts - rec * 0.5,
-            "FPTS_Standard": fpts - rec,
-        })
+        rows.append(
+            {
+                "Player": f"{position}_Player_{i}",
+                "Player_Norm": f"{position.lower()}_player_{i}",
+                "Team_Abbr": "TST",
+                "Position": position,
+                "FPTS": fpts,
+                "Rec": rec,
+                "FPTS_FullPPR": fpts,
+                "FPTS_HalfPPR": fpts - rec * 0.5,
+                "FPTS_Standard": fpts - rec,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -110,9 +111,9 @@ class TestCalculateBaselineVOR:
         result = vor_calculator.calculate_baseline_vor(df)
 
         # Pick top WR (has receptions, so scoring differs)
-        top_wr = result[result["Position"] == "WR"].sort_values(
-            "VOR_FullPPR", ascending=False
-        ).iloc[0]
+        top_wr = (
+            result[result["Position"] == "WR"].sort_values("VOR_FullPPR", ascending=False).iloc[0]
+        )
 
         assert top_wr["VOR_FullPPR"] > top_wr["VOR_HalfPPR"]
         assert top_wr["VOR_HalfPPR"] > top_wr["VOR_Standard"]
@@ -155,9 +156,7 @@ class TestCalculateBaselineVOR:
 
         for position in VOR_BASELINE_COUNTS:
             pos_df = result[result["Position"] == position]
-            assert pos_df["VOR_FullPPR"].notna().all(), (
-                f"All {position} players should have VOR"
-            )
+            assert pos_df["VOR_FullPPR"].notna().all(), f"All {position} players should have VOR"
 
 
 # ── Tests with real 2025 data ─────────────────────────────────────────
@@ -181,22 +180,14 @@ class TestVORWithRealData:
 
         # All top-5 should have substantial VOR
         for _, row in top5.iterrows():
-            assert row["VOR_HalfPPR"] > 20, (
-                f"{row['Player']} VOR too low: {row['VOR_HalfPPR']:.1f}"
-            )
+            assert row["VOR_HalfPPR"] > 20, f"{row['Player']} VOR too low: {row['VOR_HalfPPR']:.1f}"
 
-    def test_every_position_has_positive_vor_players(
-        self, vor_calculator, transformed_data
-    ):
+    def test_every_position_has_positive_vor_players(self, vor_calculator, transformed_data):
         result = vor_calculator.calculate_baseline_vor(transformed_data)
 
         for position in VOR_BASELINE_COUNTS:
-            pos_positive = result[
-                (result["Position"] == position) & (result["VOR_HalfPPR"] > 0)
-            ]
-            assert len(pos_positive) > 0, (
-                f"No positive-VOR players at {position}"
-            )
+            pos_positive = result[(result["Position"] == position) & (result["VOR_HalfPPR"] > 0)]
+            assert len(pos_positive) > 0, f"No positive-VOR players at {position}"
 
     def test_negative_vor_exists(self, vor_calculator, transformed_data):
         """There should be below-replacement players with negative VOR."""

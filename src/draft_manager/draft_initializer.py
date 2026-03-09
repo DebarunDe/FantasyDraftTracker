@@ -52,9 +52,7 @@ class DraftInitializer:
         Returns:
             DraftState ready to begin drafting
         """
-        self._validate_inputs(
-            league_size, scoring_format, roster_slots, team_names, human_team_id
-        )
+        self._validate_inputs(league_size, scoring_format, roster_slots, team_names, human_team_id)
 
         player_data = self._load_player_data(data_year)
 
@@ -102,20 +100,16 @@ class DraftInitializer:
     ):
         """Validate draft configuration inputs."""
         if league_size < 2 or league_size > 20 or league_size % 2 != 0:
-            raise ValueError(
-                "League size must be an even number between 2 and 20"
-            )
+            raise ValueError("League size must be an even number between 2 and 20")
 
         if len(team_names) != league_size:
             raise ValueError(
-                f"Number of team names ({len(team_names)}) "
-                f"must match league size ({league_size})"
+                f"Number of team names ({len(team_names)}) must match league size ({league_size})"
             )
 
         if human_team_id < 0 or human_team_id >= league_size:
             raise ValueError(
-                f"Human team ID ({human_team_id}) "
-                f"must be between 0 and {league_size - 1}"
+                f"Human team ID ({human_team_id}) must be between 0 and {league_size - 1}"
             )
 
         if scoring_format not in self.VALID_SCORING_FORMATS:
@@ -143,9 +137,7 @@ class DraftInitializer:
             data = json.load(f)
 
         try:
-            player_data = {
-                player["player_id"]: player for player in data["players"]
-            }
+            player_data = {player["player_id"]: player for player in data["players"]}
         except KeyError as e:
             raise ValueError(
                 f"Malformed player data file for {data_year}: missing key {e}. "
@@ -171,20 +163,16 @@ class DraftInitializer:
         for i, trade in enumerate(pick_trades):
             missing = required_keys - set(trade.keys())
             if missing:
-                raise ValueError(
-                    f"Trade #{i} is missing required keys: {missing}"
-                )
+                raise ValueError(f"Trade #{i} is missing required keys: {missing}")
             from_id = trade["from_team_id"]
             to_id = trade["to_team_id"]
             if not (0 <= from_id < league_size):
                 raise ValueError(
-                    f"Trade #{i}: from_team_id {from_id} is out of range "
-                    f"[0, {league_size - 1}]"
+                    f"Trade #{i}: from_team_id {from_id} is out of range [0, {league_size - 1}]"
                 )
             if not (0 <= to_id < league_size):
                 raise ValueError(
-                    f"Trade #{i}: to_team_id {to_id} is out of range "
-                    f"[0, {league_size - 1}]"
+                    f"Trade #{i}: to_team_id {to_id} is out of range [0, {league_size - 1}]"
                 )
 
     @staticmethod

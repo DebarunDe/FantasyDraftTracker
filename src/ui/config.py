@@ -27,20 +27,29 @@ SCORING_DISPLAY_NAMES = {
 VALID_LEAGUE_SIZES = [4, 6, 8, 10, 12, 14, 16, 18, 20]
 
 # Reach/steal indicator thresholds (picks vs ADP)
-REACH_STEAL_LABEL_THRESHOLD = 8   # ±8 picks to earn a label
-STEAL_STRONG_THRESHOLD = 15       # +15 picks = "STEAL" (bold green)
+REACH_STEAL_LABEL_THRESHOLD = 8  # ±8 picks to earn a label
+STEAL_STRONG_THRESHOLD = 15  # +15 picks = "STEAL" (bold green)
 
 # Commands recognized by the CLI
 COMMANDS = {
-    "a", "available",
-    "r", "roster",
-    "s", "search",
-    "rec", "recommend",
-    "h", "help",
-    "q", "quit",
-    "b", "board",
+    "a",
+    "available",
+    "r",
+    "roster",
+    "s",
+    "search",
+    "rec",
+    "recommend",
+    "h",
+    "help",
+    "q",
+    "quit",
+    "b",
+    "board",
     "save",
-    "sim", "simulate",
-    "compare", "comp",
+    "sim",
+    "simulate",
+    "compare",
+    "comp",
     "export",
 }

@@ -2,13 +2,11 @@
 
 from typing import Dict, List, Optional
 
-from src.simulation_engine.models import Recommendation
-
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
+from src.simulation_engine.models import Recommendation
 from src.ui.config import (
     POSITION_COLORS,
     REACH_STEAL_LABEL_THRESHOLD,
@@ -190,9 +188,7 @@ class DraftDisplay:
         self.console.print(table)
         return displayed
 
-    def show_search_results(
-        self, results: List[Dict], scoring_format: str
-    ) -> None:
+    def show_search_results(self, results: List[Dict], scoring_format: str) -> None:
         """Display search results in a numbered table."""
         if not results:
             self.console.print("[yellow]No players found.[/yellow]")
@@ -269,9 +265,7 @@ class DraftDisplay:
                         "-",
                     )
 
-        self.console.print(
-            Panel(table, title=f"{team_name} - Roster", border_style="bright_cyan")
-        )
+        self.console.print(Panel(table, title=f"{team_name} - Roster", border_style="bright_cyan"))
 
     # ------------------------------------------------------------------
     # VOR recommendations
@@ -344,8 +338,14 @@ class DraftDisplay:
         displayed: List[Dict] = []
         for rec in recommendations:
             color = POSITION_COLORS.get(rec.position, "white")
-            displayed.append({"player_id": rec.player_id, "name": rec.player_name,
-                               "position": rec.position, "team": rec.team})
+            displayed.append(
+                {
+                    "player_id": rec.player_id,
+                    "name": rec.player_name,
+                    "position": rec.position,
+                    "team": rec.team,
+                }
+            )
             table.add_row(
                 str(rec.rank),
                 rec.player_name,
@@ -550,9 +550,7 @@ class DraftDisplay:
         self.console.print()
 
         teams = summary.get("teams", [])
-        teams_sorted = sorted(
-            teams, key=lambda t: t.get("projected_points", 0), reverse=True
-        )
+        teams_sorted = sorted(teams, key=lambda t: t.get("projected_points", 0), reverse=True)
 
         table = Table(title="Final Standings", show_lines=False)
         table.add_column("#", justify="right", width=4)
@@ -597,8 +595,8 @@ class DraftDisplay:
             "  [cyan]compare[/cyan]         Compare all teams' projected points\n"
             "  [cyan]export[/cyan]          Export draft picks to CSV\n"
             "  [cyan]save[/cyan]            Save draft state\n"
-            + sim_line +
-            "  [cyan]h[/cyan] / [cyan]help[/cyan]       Show this help\n"
+            + sim_line
+            + "  [cyan]h[/cyan] / [cyan]help[/cyan]       Show this help\n"
             "  [cyan]q[/cyan] / [cyan]quit[/cyan]       Save and quit"
         )
         self.console.print(Panel(help_text, title="Help", border_style="dim"))

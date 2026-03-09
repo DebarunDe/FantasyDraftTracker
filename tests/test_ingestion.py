@@ -1,12 +1,9 @@
 """Tests for the FantasyPros CSV ingestion module."""
 
-import textwrap
-
 import pandas as pd
 import pytest
 
 from src.data_pipeline.ingestion import FantasyProsIngester, IngestionError
-
 
 # ---------------------------------------------------------------------------
 # Fixtures (ingester comes from conftest.py)
@@ -22,6 +19,7 @@ def tmp_ingester(tmp_path):
 # ---------------------------------------------------------------------------
 # Rankings tests
 # ---------------------------------------------------------------------------
+
 
 class TestReadRankings:
     def test_loads_all_players(self, ingester):
@@ -54,6 +52,7 @@ class TestReadRankings:
 # ---------------------------------------------------------------------------
 # QB projection tests
 # ---------------------------------------------------------------------------
+
 
 class TestReadQBProjections:
     def test_loads_qbs(self, ingester):
@@ -91,6 +90,7 @@ class TestReadQBProjections:
 # ---------------------------------------------------------------------------
 # FLEX projection tests (RB/WR/TE)
 # ---------------------------------------------------------------------------
+
 
 class TestReadFlexProjections:
     def test_loads_flex_players(self, ingester):
@@ -132,6 +132,7 @@ class TestReadFlexProjections:
 # Kicker projection tests
 # ---------------------------------------------------------------------------
 
+
 class TestReadKProjections:
     def test_loads_kickers(self, ingester):
         df = ingester.read_k_projections()
@@ -150,6 +151,7 @@ class TestReadKProjections:
 # ---------------------------------------------------------------------------
 # DST projection tests
 # ---------------------------------------------------------------------------
+
 
 class TestReadDSTProjections:
     def test_loads_dsts(self, ingester):
@@ -176,6 +178,7 @@ class TestReadDSTProjections:
 # read_all convenience method
 # ---------------------------------------------------------------------------
 
+
 class TestReadAll:
     def test_returns_all_keys(self, ingester):
         data = ingester.read_all()
@@ -190,6 +193,7 @@ class TestReadAll:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     def test_missing_file_raises_file_not_found(self, tmp_ingester):

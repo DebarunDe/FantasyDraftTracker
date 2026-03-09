@@ -1,11 +1,8 @@
 """Tests for CLI player search and input parsing."""
 
-import pytest
-
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.ui.player_search import PlayerSearcher, normalize_name
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -19,8 +16,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -72,7 +75,7 @@ def _make_searcher():
     """Create a PlayerSearcher with test data."""
     config = _make_league_config()
     player_data = _make_player_data()
-    team_names = [f"Team {i+1}" for i in range(4)]
+    team_names = [f"Team {i + 1}" for i in range(4)]
     draft_state = DraftState.create_new(
         league_config=config,
         team_names=team_names,

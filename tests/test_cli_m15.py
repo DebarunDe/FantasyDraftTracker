@@ -4,19 +4,14 @@ Covers: DraftExporter CSV output, CLI board/compare/export commands.
 """
 
 import csv
-import re
 from io import StringIO
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from rich.console import Console
 
 from src.draft_manager.draft_state import DraftState, LeagueConfig, Pick
 from src.ui.cli import DraftApp
-from src.ui.display import DraftDisplay
 from src.ui.export import DraftExporter, _reach_label
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -36,8 +31,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -282,7 +283,9 @@ class TestExportCommand:
         app, output = _make_app_with_state()
         exporter = DraftExporter()
 
-        with patch.object(exporter, "export_to_csv", return_value=tmp_path / "test.csv") as mock_exp:
+        with patch.object(
+            exporter, "export_to_csv", return_value=tmp_path / "test.csv"
+        ) as mock_exp:
             (tmp_path / "test.csv").touch()
             # Patch DraftExporter constructor to return our mock
             with patch("src.ui.cli.DraftExporter", return_value=exporter):
@@ -294,7 +297,5 @@ class TestExportCommand:
     def test_export_creates_file(self, tmp_path):
         app, output = _make_app_with_state()
         exporter = DraftExporter()
-        path = exporter.export_to_csv(
-            app.draft_state, "half_ppr", output_dir=str(tmp_path)
-        )
+        path = exporter.export_to_csv(app.draft_state, "half_ppr", output_dir=str(tmp_path))
         assert path.exists()

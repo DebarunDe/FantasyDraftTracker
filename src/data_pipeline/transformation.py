@@ -47,46 +47,58 @@ class DataTransformer:
 
         # --- QBs ---
         for _, r in qb_df.iterrows():
-            rows.append(self._make_row(
-                r, position="QB",
-                pass_att=r.get("Pass_Att", 0),
-                pass_cmp=r.get("Pass_Cmp", 0),
-                pass_yds=r.get("Pass_Yds", 0),
-                pass_td=r.get("Pass_TD", 0),
-                pass_int=r.get("Pass_Int", 0),
-                rush_att=r.get("Rush_Att", 0),
-                rush_yds=r.get("Rush_Yds", 0),
-                rush_td=r.get("Rush_TD", 0),
-                fl=r.get("FL", 0),
-            ))
+            rows.append(
+                self._make_row(
+                    r,
+                    position="QB",
+                    pass_att=r.get("Pass_Att", 0),
+                    pass_cmp=r.get("Pass_Cmp", 0),
+                    pass_yds=r.get("Pass_Yds", 0),
+                    pass_td=r.get("Pass_TD", 0),
+                    pass_int=r.get("Pass_Int", 0),
+                    rush_att=r.get("Rush_Att", 0),
+                    rush_yds=r.get("Rush_Yds", 0),
+                    rush_td=r.get("Rush_TD", 0),
+                    fl=r.get("FL", 0),
+                )
+            )
 
         # --- FLEX (RB / WR / TE) ---
         for _, r in flex_df.iterrows():
-            rows.append(self._make_row(
-                r, position=r.get("Position", "FLEX"),
-                rush_att=r.get("Rush_Att", 0),
-                rush_yds=r.get("Rush_Yds", 0),
-                rush_td=r.get("Rush_TD", 0),
-                rec=r.get("Rec", 0),
-                rec_yds=r.get("Rec_Yds", 0),
-                rec_td=r.get("Rec_TD", 0),
-                fl=r.get("FL", 0),
-            ))
+            rows.append(
+                self._make_row(
+                    r,
+                    position=r.get("Position", "FLEX"),
+                    rush_att=r.get("Rush_Att", 0),
+                    rush_yds=r.get("Rush_Yds", 0),
+                    rush_td=r.get("Rush_TD", 0),
+                    rec=r.get("Rec", 0),
+                    rec_yds=r.get("Rec_Yds", 0),
+                    rec_td=r.get("Rec_TD", 0),
+                    fl=r.get("FL", 0),
+                )
+            )
 
         # --- Kickers ---
         for _, r in k_df.iterrows():
-            rows.append(self._make_row(
-                r, position="K",
-                fg=r.get("FG", 0),
-                fga=r.get("FGA", 0),
-                xpt=r.get("XPT", 0),
-            ))
+            rows.append(
+                self._make_row(
+                    r,
+                    position="K",
+                    fg=r.get("FG", 0),
+                    fga=r.get("FGA", 0),
+                    xpt=r.get("XPT", 0),
+                )
+            )
 
         # --- DST ---
         for _, r in dst_df.iterrows():
-            rows.append(self._make_row(
-                r, position="DST",
-            ))
+            rows.append(
+                self._make_row(
+                    r,
+                    position="DST",
+                )
+            )
 
         merged = pd.DataFrame(rows)
         logger.info("Merged projections: %d total players", len(merged))
@@ -103,12 +115,21 @@ class DataTransformer:
         self,
         row: pd.Series,
         position: str,
-        pass_att: float = 0, pass_cmp: float = 0,
-        pass_yds: float = 0, pass_td: float = 0, pass_int: float = 0,
-        rush_att: float = 0, rush_yds: float = 0, rush_td: float = 0,
-        rec: float = 0, rec_yds: float = 0, rec_td: float = 0,
+        pass_att: float = 0,
+        pass_cmp: float = 0,
+        pass_yds: float = 0,
+        pass_td: float = 0,
+        pass_int: float = 0,
+        rush_att: float = 0,
+        rush_yds: float = 0,
+        rush_td: float = 0,
+        rec: float = 0,
+        rec_yds: float = 0,
+        rec_td: float = 0,
         fl: float = 0,
-        fg: float = 0, fga: float = 0, xpt: float = 0,
+        fg: float = 0,
+        fga: float = 0,
+        xpt: float = 0,
     ) -> dict:
         """Build a unified row dict from a source row and explicit stats."""
         sf = self._safe_float
@@ -179,20 +200,22 @@ class DataTransformer:
 
         # Columns to pull from rankings
         rank_cols = [
-            "Player_Norm", "Position", "RK", "Pos_Rank",
-            "BYE WEEK", "TIERS", "ECR VS. ADP",
+            "Player_Norm",
+            "Position",
+            "RK",
+            "Pos_Rank",
+            "BYE WEEK",
+            "TIERS",
+            "ECR VS. ADP",
         ]
         available = [c for c in rank_cols if c in rankings_df.columns]
         rank_subset = rankings_df[available].copy()
 
         # Drop duplicate keys so the left join stays 1:1
-        rank_subset = rank_subset.drop_duplicates(
-            subset=["Player_Norm", "Position"], keep="first"
-        )
+        rank_subset = rank_subset.drop_duplicates(subset=["Player_Norm", "Position"], keep="first")
 
         # Columns that the merge will add (used to detect matched rows)
-        rank_value_cols = [c for c in rank_subset.columns
-                          if c not in ("Player_Norm", "Position")]
+        rank_value_cols = [c for c in rank_subset.columns if c not in ("Player_Norm", "Position")]
 
         # --- Pass 1: exact match ---
         merged = projections_df.merge(
@@ -203,7 +226,9 @@ class DataTransformer:
         )
 
         # Identify rows that didn't match (RK is null)
-        unmatched = merged["RK"].isna() if "RK" in merged.columns else pd.Series(True, index=merged.index)
+        unmatched = (
+            merged["RK"].isna() if "RK" in merged.columns else pd.Series(True, index=merged.index)
+        )
         n_pass1 = (~unmatched).sum()
 
         # --- Pass 2: suffix-stripped fallback for unmatched rows ---
@@ -244,15 +269,11 @@ class DataTransformer:
 
             n_pass2 = fallback["RK"].notna().sum() if "RK" in fallback.columns else 0
             if n_pass2:
-                logger.info(
-                    "Suffix-stripped fallback matched %d additional player(s)", n_pass2
-                )
+                logger.info("Suffix-stripped fallback matched %d additional player(s)", n_pass2)
 
             # Drop helper column and splice back
             fallback = fallback.drop(columns=["_base_name"])
-            merged = pd.concat(
-                [merged.loc[~unmatched], fallback], ignore_index=True
-            )
+            merged = pd.concat([merged.loc[~unmatched], fallback], ignore_index=True)
 
         # Rename for clarity
         rename_map = {
@@ -261,9 +282,7 @@ class DataTransformer:
             "TIERS": "Tier",
             "ECR VS. ADP": "ECR_vs_ADP",
         }
-        merged = merged.rename(
-            columns={k: v for k, v in rename_map.items() if k in merged.columns}
-        )
+        merged = merged.rename(columns={k: v for k, v in rename_map.items() if k in merged.columns})
 
         # Fill missing ranking data for players not in the rankings file
         if "Overall_Rank" in merged.columns:
@@ -271,11 +290,19 @@ class DataTransformer:
         if "Tier" in merged.columns:
             merged["Tier"] = merged["Tier"].fillna(UNRANKED_TIER).astype(int)
 
-        total_matched = merged["Overall_Rank"].ne(UNRANKED_OVERALL).sum() if "Overall_Rank" in merged.columns else 0
+        total_matched = (
+            merged["Overall_Rank"].ne(UNRANKED_OVERALL).sum()
+            if "Overall_Rank" in merged.columns
+            else 0
+        )
         logger.info(
             "Merged with rankings: %d matched (%d exact, %d fallback), %d unmatched",
-            total_matched, n_pass1, total_matched - n_pass1,
-            merged["Overall_Rank"].eq(UNRANKED_OVERALL).sum() if "Overall_Rank" in merged.columns else len(merged),
+            total_matched,
+            n_pass1,
+            total_matched - n_pass1,
+            merged["Overall_Rank"].eq(UNRANKED_OVERALL).sum()
+            if "Overall_Rank" in merged.columns
+            else len(merged),
         )
         return merged
 
@@ -289,14 +316,11 @@ class DataTransformer:
         Format: {name}_{position}_{team}
         Example: jamarr_chase_wr_cin
         """
+
         def _make_id(row):
             name = str(row.get("Player_Norm") or row.get("Player") or "unknown")
             name = (
-                name.lower()
-                .replace("'", "")
-                .replace(".", "")
-                .replace("-", "_")
-                .replace(" ", "_")
+                name.lower().replace("'", "").replace(".", "").replace("-", "_").replace(" ", "_")
             )
             pos = str(row.get("Position", "unk")).lower()
             team = str(row.get("Team_Abbr") or "fa").lower()
@@ -313,9 +337,7 @@ class DataTransformer:
             for pid in dupe_ids:
                 mask = out["player_id"] == pid
                 suffixes = range(1, mask.sum() + 1)
-                out.loc[mask, "player_id"] = [
-                    f"{pid}_{i}" for i in suffixes
-                ]
+                out.loc[mask, "player_id"] = [f"{pid}_{i}" for i in suffixes]
 
         logger.info("Generated %d player IDs", len(out))
         return out
@@ -323,9 +345,7 @@ class DataTransformer:
     # ------------------------------------------------------------------
     # Full transformation pipeline
     # ------------------------------------------------------------------
-    def transform(
-        self, cleaned: dict[str, pd.DataFrame]
-    ) -> pd.DataFrame:
+    def transform(self, cleaned: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Run the full transformation pipeline on cleaned data.
 
         Args:
@@ -345,7 +365,10 @@ class DataTransformer:
 
         # 1. Merge all projections
         merged = self.merge_projections(
-            cleaned["qb"], cleaned["flex"], cleaned["k"], cleaned["dst"],
+            cleaned["qb"],
+            cleaned["flex"],
+            cleaned["k"],
+            cleaned["dst"],
         )
 
         # 2. Calculate scoring variants

@@ -41,11 +41,11 @@ NEED_NORMALIZATION = 3.0
 # QB/TE have 1-2 starting slots so cap tighter at 3 total.
 # K/DST: 1 starting slot; cap at 2 to allow one streamer backup max.
 POSITION_HARD_CAPS = {
-    "QB": 3,   # 1 starter + 2 max bench depth
-    "RB": 7,   # 3 starting + 4 bench max
-    "WR": 7,   # 3 starting + 4 bench max
-    "TE": 3,   # 2 starting (1 TE + FLEX share) + 1 bench
-    "K": 2,    # 1 starter + 1 backup max
+    "QB": 3,  # 1 starter + 2 max bench depth
+    "RB": 7,  # 3 starting + 4 bench max
+    "WR": 7,  # 3 starting + 4 bench max
+    "TE": 3,  # 2 starting (1 TE + FLEX share) + 1 bench
+    "K": 2,  # 1 starter + 1 backup max
     "DST": 2,  # 1 starter + 1 backup max
 }
 
@@ -53,17 +53,17 @@ POSITION_HARD_CAPS = {
 # Higher uncertainty = less predictable projections
 # Used for risk-adjusted VOR in late rounds (favor high-upside players)
 POSITION_UNCERTAINTY = {
-    "QB": 0.20,   # R²=0.80 → most predictable
-    "TE": 0.21,   # R²=0.79 → very predictable
-    "WR": 0.56,   # R²=0.44 → moderate uncertainty
-    "RB": 0.97,   # R²=0.03 → highly unpredictable!
-    "K": 0.70,    # Moderate uncertainty (estimate)
+    "QB": 0.20,  # R²=0.80 → most predictable
+    "TE": 0.21,  # R²=0.79 → very predictable
+    "WR": 0.56,  # R²=0.44 → moderate uncertainty
+    "RB": 0.97,  # R²=0.03 → highly unpredictable!
+    "K": 0.70,  # Moderate uncertainty (estimate)
     "DST": 0.70,  # Moderate uncertainty (estimate)
 }
 
 # Round thresholds for uncertainty-based adjustments
-EARLY_ROUND_THRESHOLD = 3   # Rounds 1-3: penalize uncertainty
-LATE_ROUND_THRESHOLD = 10   # Rounds 10+: reward upside
+EARLY_ROUND_THRESHOLD = 3  # Rounds 1-3: penalize uncertainty
+LATE_ROUND_THRESHOLD = 10  # Rounds 10+: reward upside
 
 # Tier detection parameters
 TIER_GAP_THRESHOLD = 0.15  # 15% VOR drop between adjacent players = tier boundary
@@ -81,20 +81,20 @@ TIER_URGENCY_WEIGHT = 1.5
 # The ADP signal is player['overall_rank'] (FantasyPros ECR) — already in the
 # player JSON from the data pipeline. No new data source is needed.
 
-COMPUTER_STRATEGY            = "balanced"  # Default for all computer teams
-COMPUTER_PERSONALITY_VARIANCE = 0.05       # Reserved for future use
+COMPUTER_STRATEGY = "balanced"  # Default for all computer teams
+COMPUTER_PERSONALITY_VARIANCE = 0.05  # Reserved for future use
 
 # Default ADP blend weight (0.0 = pure VOR, 1.0 = pure ADP)
-COMPUTER_ADP_WEIGHT = 0.4    # 60% VOR + 40% ADP → realistic human-like drafting
+COMPUTER_ADP_WEIGHT = 0.4  # 60% VOR + 40% ADP → realistic human-like drafting
 
 # Per-strategy ADP blend weights.
 # ComputerDrafter.__init__ looks up strategy name here when no explicit
 # adp_weight is provided.
 ADP_BLEND_STRATEGIES = {
-    "vor_only":   0.0,   # Pure dynamic VOR (optimal but RB-heavy)
-    "balanced":   0.4,   # 60% VOR + 40% ADP (default — realistic)
-    "consensus":  0.7,   # 30% VOR + 70% ADP (consensus follower)
-    "contrarian": 0.0,   # Pure VOR + ±15% uniform noise (exploits ADP inefficiencies)
+    "vor_only": 0.0,  # Pure dynamic VOR (optimal but RB-heavy)
+    "balanced": 0.4,  # 60% VOR + 40% ADP (default — realistic)
+    "consensus": 0.7,  # 30% VOR + 70% ADP (consensus follower)
+    "contrarian": 0.0,  # Pure VOR + ±15% uniform noise (exploits ADP inefficiencies)
 }
 
 # Performance tuning
@@ -109,7 +109,7 @@ MC_COMPUTER_PICK_TOP_K = 3
 
 # Adaptive simulation depths
 SIMULATION_DEPTH_BY_ROUND = {
-    "early": 5,   # Rounds 1-3
-    "mid": 3,     # Rounds 4-9
-    "late": 2,    # Rounds 10+
+    "early": 5,  # Rounds 1-3
+    "mid": 3,  # Rounds 4-9
+    "late": 2,  # Rounds 10+
 }

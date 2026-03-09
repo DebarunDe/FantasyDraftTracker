@@ -1,12 +1,10 @@
 """Tests for draft initializer - creating new drafts from real pipeline data."""
 
-import json
 from pathlib import Path
 
 import pytest
 
 from src.draft_manager.draft_initializer import DraftInitializer
-
 
 # ── Check data availability ──────────────────────────────────────────
 
@@ -19,6 +17,7 @@ requires_player_data = pytest.mark.skipif(
 
 
 # ── Input Validation ─────────────────────────────────────────────────
+
 
 class TestInputValidation:
     def test_league_size_too_small(self):
@@ -129,9 +128,7 @@ class TestInputValidation:
     def test_malformed_json_missing_player_id(self, tmp_path):
         """Player records without 'player_id' should raise ValueError."""
         bad_file = tmp_path / "players_2025.json"
-        bad_file.write_text(
-            '{"players": [{"name": "No ID"}]}', encoding="utf-8"
-        )
+        bad_file.write_text('{"players": [{"name": "No ID"}]}', encoding="utf-8")
         init = DraftInitializer(processed_data_dir=tmp_path)
         with pytest.raises(ValueError, match="Malformed player data"):
             init.create_draft(
@@ -145,6 +142,7 @@ class TestInputValidation:
 
 
 # ── Default Helpers ──────────────────────────────────────────────────
+
 
 class TestDefaults:
     def test_default_roster_slots(self):
@@ -171,13 +169,14 @@ class TestDefaults:
 
 # ── Integration with Real Data ───────────────────────────────────────
 
+
 @requires_player_data
 class TestCreateDraftWithRealData:
     """Integration tests using real processed pipeline output."""
 
     def test_create_12_team_draft(self):
         init = DraftInitializer()
-        team_names = [f"Team {i+1}" for i in range(12)]
+        team_names = [f"Team {i + 1}" for i in range(12)]
         state = init.create_draft(
             league_size=12,
             scoring_format="half_ppr",
@@ -199,7 +198,7 @@ class TestCreateDraftWithRealData:
             league_size=12,
             scoring_format="half_ppr",
             roster_slots=DraftInitializer.get_default_roster_slots(),
-            team_names=[f"Team {i+1}" for i in range(12)],
+            team_names=[f"Team {i + 1}" for i in range(12)],
             human_team_id=0,
             data_year=2025,
         )
@@ -218,7 +217,7 @@ class TestCreateDraftWithRealData:
                 league_size=4,
                 scoring_format=fmt,
                 roster_slots=DraftInitializer.get_default_roster_slots(),
-                team_names=[f"Team {i+1}" for i in range(4)],
+                team_names=[f"Team {i + 1}" for i in range(4)],
                 human_team_id=0,
                 data_year=2025,
             )
@@ -230,7 +229,7 @@ class TestCreateDraftWithRealData:
             league_size=4,
             scoring_format="half_ppr",
             roster_slots=DraftInitializer.get_default_roster_slots(),
-            team_names=[f"Team {i+1}" for i in range(4)],
+            team_names=[f"Team {i + 1}" for i in range(4)],
             human_team_id=0,
             draft_mode="simulation",
             data_year=2025,
@@ -243,7 +242,7 @@ class TestCreateDraftWithRealData:
             league_size=4,
             scoring_format="half_ppr",
             roster_slots=DraftInitializer.get_default_roster_slots(),
-            team_names=[f"Team {i+1}" for i in range(4)],
+            team_names=[f"Team {i + 1}" for i in range(4)],
             human_team_id=0,
             draft_mode="manual_tracker",
             data_year=2025,
@@ -256,7 +255,7 @@ class TestCreateDraftWithRealData:
             league_size=4,
             scoring_format="half_ppr",
             roster_slots=DraftInitializer.get_default_roster_slots(),
-            team_names=[f"Team {i+1}" for i in range(4)],
+            team_names=[f"Team {i + 1}" for i in range(4)],
             human_team_id=2,
             data_year=2025,
         )
@@ -266,14 +265,20 @@ class TestCreateDraftWithRealData:
     def test_custom_roster_slots(self):
         init = DraftInitializer()
         custom_slots = {
-            "QB": 2, "RB": 3, "WR": 3, "TE": 2,
-            "FLEX": 2, "DST": 1, "K": 1, "BENCH": 4,
+            "QB": 2,
+            "RB": 3,
+            "WR": 3,
+            "TE": 2,
+            "FLEX": 2,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 4,
         }
         state = init.create_draft(
             league_size=4,
             scoring_format="half_ppr",
             roster_slots=custom_slots,
-            team_names=[f"Team {i+1}" for i in range(4)],
+            team_names=[f"Team {i + 1}" for i in range(4)],
             human_team_id=0,
             data_year=2025,
         )
@@ -287,7 +292,7 @@ class TestCreateDraftWithRealData:
             league_size=4,
             scoring_format="half_ppr",
             roster_slots=DraftInitializer.get_default_roster_slots(),
-            team_names=[f"Team {i+1}" for i in range(4)],
+            team_names=[f"Team {i + 1}" for i in range(4)],
             human_team_id=0,
             data_year=2025,
         )
@@ -334,8 +339,8 @@ class TestCreateDraftWithRealData:
             human_team_id=0,
             data_year=2025,
         )
-        assert state.draft_order[0] == [0, 1, 2, 3]   # Round 1 ascending
-        assert state.draft_order[1] == [3, 2, 1, 0]   # Round 2 descending
+        assert state.draft_order[0] == [0, 1, 2, 3]  # Round 1 ascending
+        assert state.draft_order[1] == [3, 2, 1, 0]  # Round 2 descending
         assert state.pick_trades == []
 
 

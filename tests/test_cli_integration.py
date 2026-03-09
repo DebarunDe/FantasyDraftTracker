@@ -1,21 +1,17 @@
 """Integration tests for the CLI draft application."""
 
 from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 from rich.console import Console
 
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_state import DraftState, LeagueConfig
-from src.draft_manager.draft_rules import ValidationError
 from src.draft_manager.state_persistence import StatePersistence
 from src.simulation_engine.computer_drafter import ComputerDrafter
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 from src.ui.cli import DraftApp
-from src.ui.display import DraftDisplay
 from src.ui.player_search import PlayerSearcher
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -29,8 +25,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 1, "WR": 1, "TE": 0,
-            "FLEX": 0, "DST": 0, "K": 0, "BENCH": 0,
+            "QB": 1,
+            "RB": 1,
+            "WR": 1,
+            "TE": 0,
+            "FLEX": 0,
+            "DST": 0,
+            "K": 0,
+            "BENCH": 0,
         },
     }
     defaults.update(overrides)
@@ -101,10 +103,9 @@ def _make_app_with_draft(responses, draft_mode="simulation"):
     )
     app.controller = DraftController(app.draft_state)
     app.vor_calculator = DynamicVORCalculator("half_ppr", league_size=2)
-    app.computer_drafter = ComputerDrafter(
-        vor_calculator=app.vor_calculator, strategy="balanced"
-    )
+    app.computer_drafter = ComputerDrafter(vor_calculator=app.vor_calculator, strategy="balanced")
     from src.simulation_engine.pick_recommender import PickRecommender
+
     app.recommender = PickRecommender(vor_calculator=app.vor_calculator)
     app.searcher = PlayerSearcher(app.controller)
     app.persistence = MagicMock(spec=StatePersistence)
@@ -118,9 +119,12 @@ def _make_app_with_draft(responses, draft_mode="simulation"):
 class TestPickExecution:
     def test_pick_by_exact_name(self):
         """User picks by typing exact player name."""
-        app, output = _make_app_with_draft([
-            "Josh Allen", "y",   # Pick 1: Human team picks QB
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen",
+                "y",  # Pick 1: Human team picks QB
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -130,9 +134,12 @@ class TestPickExecution:
 
     def test_pick_by_number_from_recommendations(self):
         """User picks by number from VOR recommendation list."""
-        app, output = _make_app_with_draft([
-            "1", "y",  # Pick #1 from recommendation list
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "1",
+                "y",  # Pick #1 from recommendation list
+            ]
+        )
 
         # First show recommendations so last_displayed_players is populated
         app._show_recommendations()
@@ -144,10 +151,14 @@ class TestPickExecution:
 
     def test_pick_declined_reprompts(self):
         """User declines confirmation, then picks another player."""
-        app, output = _make_app_with_draft([
-            "Josh Allen", "n",       # Decline first pick
-            "Jalen Hurts", "y",      # Accept second pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen",
+                "n",  # Decline first pick
+                "Jalen Hurts",
+                "y",  # Accept second pick
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -157,10 +168,13 @@ class TestPickExecution:
 
     def test_invalid_name_shows_error(self):
         """Searching for non-existent player shows error."""
-        app, output = _make_app_with_draft([
-            "zzz nonexistent",
-            "Josh Allen", "y",
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "zzz nonexistent",
+                "Josh Allen",
+                "y",
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -169,9 +183,12 @@ class TestPickExecution:
 
     def test_auto_save_after_pick(self):
         """Persistence.save_draft is called after each pick."""
-        app, output = _make_app_with_draft([
-            "Josh Allen", "y",
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen",
+                "y",
+            ]
+        )
 
         app._handle_pick_turn()
 
@@ -183,10 +200,13 @@ class TestPickExecution:
 
 class TestCommandHandling:
     def test_help_command(self):
-        app, output = _make_app_with_draft([
-            "h",                    # Show help
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "h",  # Show help
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -195,10 +215,13 @@ class TestCommandHandling:
         assert "roster" in text
 
     def test_available_command(self):
-        app, output = _make_app_with_draft([
-            "a",                    # Show available
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "a",  # Show available
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -206,10 +229,13 @@ class TestCommandHandling:
         assert "Available Players" in text
 
     def test_available_with_position_filter(self):
-        app, output = _make_app_with_draft([
-            "a qb",                 # Show available QBs
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "a qb",  # Show available QBs
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -217,10 +243,13 @@ class TestCommandHandling:
         assert "Available Players" in text
 
     def test_roster_command(self):
-        app, output = _make_app_with_draft([
-            "r",                    # Show roster
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "r",  # Show roster
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -228,10 +257,13 @@ class TestCommandHandling:
         assert "Roster" in text
 
     def test_search_command(self):
-        app, output = _make_app_with_draft([
-            "s allen",              # Search
-            "1", "y",               # Pick from results
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "s allen",  # Search
+                "1",
+                "y",  # Pick from results
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -239,10 +271,13 @@ class TestCommandHandling:
         assert "Search Results" in text
 
     def test_save_command(self):
-        app, output = _make_app_with_draft([
-            "save",                 # Manual save
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "save",  # Manual save
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         # save_draft called for 'save' command + auto-save after pick
@@ -257,10 +292,13 @@ class TestCommandHandling:
         app.persistence.save_draft.assert_called()
 
     def test_recommend_command(self):
-        app, output = _make_app_with_draft([
-            "rec",                  # Show recommendations
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "rec",  # Show recommendations
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -275,10 +313,13 @@ class TestSearchDisambiguation:
     def test_multiple_matches_shows_list(self):
         """When multiple players match, show disambiguation list."""
         # Create app with data that has two "Hurts" or similar
-        app, output = _make_app_with_draft([
-            "al",                    # Matches "Josh Allen" and "Jalen" (contains "al")
-            "1", "y",               # Pick first from results
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "al",  # Matches "Josh Allen" and "Jalen" (contains "al")
+                "1",
+                "y",  # Pick first from results
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -292,9 +333,12 @@ class TestSearchDisambiguation:
 
 class TestDraftBoard:
     def test_shows_header_on_turn(self):
-        app, output = _make_app_with_draft([
-            "Josh Allen", "y",
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen",
+                "y",
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -303,9 +347,12 @@ class TestDraftBoard:
         assert "My Team" in text
 
     def test_shows_recommendations_for_human_team(self):
-        app, output = _make_app_with_draft([
-            "Josh Allen", "y",
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen",
+                "y",
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -314,9 +361,12 @@ class TestDraftBoard:
 
     def test_no_recommendations_for_cpu_team(self):
         """When CPU team is on the clock it auto-picks; no board/rec display."""
-        app, output = _make_app_with_draft([
-            "Josh Allen", "y",  # Human picks first (only human input needed)
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "Josh Allen",
+                "y",  # Human picks first (only human input needed)
+            ]
+        )
 
         # Make first pick (human)
         app._handle_pick_turn()
@@ -343,16 +393,21 @@ class TestFullDraftFlow:
         Human (T0) picks at positions 1, 4, 5 — CPU (T1) auto-picks the rest.
         Human picks by number from the VOR recommendation list shown each turn.
         """
-        app, output = _make_app_with_draft([
-            # Pick 1: Human (T0) — pick first recommended player
-            "1", "y",
-            # Picks 2-3: CPU (T1) auto-picks — no input needed
-            # Pick 4: Human (T0) — pick first available
-            "1", "y",
-            # Pick 5: Human (T0) — pick first available
-            "1", "y",
-            # Pick 6: CPU (T1) auto-picks — no input needed
-        ])
+        app, output = _make_app_with_draft(
+            [
+                # Pick 1: Human (T0) — pick first recommended player
+                "1",
+                "y",
+                # Picks 2-3: CPU (T1) auto-picks — no input needed
+                # Pick 4: Human (T0) — pick first available
+                "1",
+                "y",
+                # Pick 5: Human (T0) — pick first available
+                "1",
+                "y",
+                # Pick 6: CPU (T1) auto-picks — no input needed
+            ]
+        )
 
         app._draft_loop()
 
@@ -361,12 +416,17 @@ class TestFullDraftFlow:
 
     def test_draft_summary_after_completion(self):
         """After draft completes, summary is available."""
-        app, output = _make_app_with_draft([
-            # Human turns at picks 1, 4, 5 (see snake order above)
-            "1", "y",
-            "1", "y",
-            "1", "y",
-        ])
+        app, output = _make_app_with_draft(
+            [
+                # Human turns at picks 1, 4, 5 (see snake order above)
+                "1",
+                "y",
+                "1",
+                "y",
+                "1",
+                "y",
+            ]
+        )
 
         app._draft_loop()
 
@@ -381,21 +441,27 @@ class TestFullDraftFlow:
 class TestEdgeCases:
     def test_empty_input_ignored(self):
         """Empty input should just re-prompt."""
-        app, output = _make_app_with_draft([
-            "",                     # Empty
-            "",                     # Empty again
-            "Josh Allen", "y",      # Then pick
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "",  # Empty
+                "",  # Empty again
+                "Josh Allen",
+                "y",  # Then pick
+            ]
+        )
 
         app._handle_pick_turn()
         assert app.draft_state.current_pick == 2
 
     def test_number_out_of_range(self):
         """Number with no prior list shows error."""
-        app, output = _make_app_with_draft([
-            "99",                   # Invalid number (empty list)
-            "Josh Allen", "y",      # Then pick normally
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "99",  # Invalid number (empty list)
+                "Josh Allen",
+                "y",  # Then pick normally
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -412,9 +478,12 @@ class TestSimulateCommand:
 
         Human is on pick 1; sim should run all 6 picks to completion.
         """
-        app, output = _make_app_with_draft([
-            "sim", "y",   # Human triggers simulation from their first turn
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "sim",
+                "y",  # Human triggers simulation from their first turn
+            ]
+        )
 
         app._draft_loop()
         text = output.getvalue()
@@ -428,14 +497,20 @@ class TestSimulateCommand:
 
         Snake order: T0 T1 T1 T0 T0 T1 — human (T0) at picks 1, 4, 5.
         """
-        app, output = _make_app_with_draft([
-            "sim", "n",      # Cancel simulation on pick 1
-            "Josh Allen", "y",  # Human picks normally
-            # Picks 2-3: CPU auto-picks
-            "1", "y",        # Human pick 4
-            "1", "y",        # Human pick 5
-            # Pick 6: CPU auto-picks
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "sim",
+                "n",  # Cancel simulation on pick 1
+                "Josh Allen",
+                "y",  # Human picks normally
+                # Picks 2-3: CPU auto-picks
+                "1",
+                "y",  # Human pick 4
+                "1",
+                "y",  # Human pick 5
+                # Pick 6: CPU auto-picks
+            ]
+        )
 
         app._draft_loop()
 
@@ -444,10 +519,13 @@ class TestSimulateCommand:
 
     def test_sim_appears_in_help(self):
         """'sim' command is listed in the help panel."""
-        app, output = _make_app_with_draft([
-            "h",
-            "Josh Allen", "y",
-        ])
+        app, output = _make_app_with_draft(
+            [
+                "h",
+                "Josh Allen",
+                "y",
+            ]
+        )
 
         app._handle_pick_turn()
         text = output.getvalue()
@@ -481,8 +559,10 @@ class TestManualTrackerMode:
         # In manual tracker, pick 2 should also require user input, not auto-pick.
         app, output = _make_app_with_draft(
             [
-                "Josh Allen", "y",    # Pick 1: My Team (human)
-                "Jalen Hurts", "y",   # Pick 2: CPU Team (manual tracker — user enters it)
+                "Josh Allen",
+                "y",  # Pick 1: My Team (human)
+                "Jalen Hurts",
+                "y",  # Pick 2: CPU Team (manual tracker — user enters it)
             ],
             draft_mode="manual_tracker",
         )
@@ -500,12 +580,18 @@ class TestManualTrackerMode:
         """
         app, output = _make_app_with_draft(
             [
-                "Josh Allen", "y",      # Pick 1: T0
-                "Jalen Hurts", "y",     # Pick 2: T1
-                "Saquon Barkley", "y",  # Pick 3: T1
-                "Breece Hall", "y",     # Pick 4: T0
-                "Ja'Marr Chase", "y",   # Pick 5: T0
-                "CeeDee Lamb", "y",     # Pick 6: T1
+                "Josh Allen",
+                "y",  # Pick 1: T0
+                "Jalen Hurts",
+                "y",  # Pick 2: T1
+                "Saquon Barkley",
+                "y",  # Pick 3: T1
+                "Breece Hall",
+                "y",  # Pick 4: T0
+                "Ja'Marr Chase",
+                "y",  # Pick 5: T0
+                "CeeDee Lamb",
+                "y",  # Pick 6: T1
             ],
             draft_mode="manual_tracker",
         )
@@ -531,8 +617,10 @@ class TestManualTrackerMode:
         """For non-human teams in manual tracker, available list shown (not recommendations)."""
         app, output = _make_app_with_draft(
             [
-                "Josh Allen", "y",   # Pick 1: T0 (human) — recs shown
-                "Jalen Hurts", "y",  # Pick 2: T1 (not human) — available list shown
+                "Josh Allen",
+                "y",  # Pick 1: T0 (human) — recs shown
+                "Jalen Hurts",
+                "y",  # Pick 2: T1 (not human) — available list shown
             ],
             draft_mode="manual_tracker",
         )
@@ -577,8 +665,10 @@ class TestManualTrackerMode:
         """User can pick by number for a non-human team (available list is auto-shown)."""
         app, output = _make_app_with_draft(
             [
-                "Josh Allen", "y",  # Pick 1: T0 (human)
-                "1", "y",           # Pick 2: T1 (CPU) — pick #1 from available list
+                "Josh Allen",
+                "y",  # Pick 1: T0 (human)
+                "1",
+                "y",  # Pick 2: T1 (CPU) — pick #1 from available list
             ],
             draft_mode="manual_tracker",
         )
@@ -593,10 +683,13 @@ class TestManualTrackerMode:
         """VOR recommendations are recalculated after each pick."""
         app, output = _make_app_with_draft(
             [
-                "Josh Allen", "y",   # Pick 1: T0
-                "Jalen Hurts", "y",  # Pick 2: T1
-                "rec",               # Check updated recs on T1's second turn (pick 3)
-                "Saquon Barkley", "y",
+                "Josh Allen",
+                "y",  # Pick 1: T0
+                "Jalen Hurts",
+                "y",  # Pick 2: T1
+                "rec",  # Check updated recs on T1's second turn (pick 3)
+                "Saquon Barkley",
+                "y",
             ],
             draft_mode="manual_tracker",
         )
@@ -614,8 +707,10 @@ class TestManualTrackerMode:
         """persistence.save_draft is called after every manual pick."""
         app, _ = _make_app_with_draft(
             [
-                "Josh Allen", "y",   # Pick 1
-                "Jalen Hurts", "y",  # Pick 2
+                "Josh Allen",
+                "y",  # Pick 1
+                "Jalen Hurts",
+                "y",  # Pick 2
             ],
             draft_mode="manual_tracker",
         )

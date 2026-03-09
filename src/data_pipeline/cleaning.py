@@ -160,13 +160,13 @@ class DataCleaner:
             return None
 
         # Standardize apostrophe variants to ASCII straight quote
-        name = name.replace("\u2019", "'")   # right single curly '
-        name = name.replace("\u2018", "'")   # left single curly '
-        name = name.replace("\u02BC", "'")   # modifier letter apostrophe ʼ
+        name = name.replace("\u2019", "'")  # right single curly '
+        name = name.replace("\u2018", "'")  # left single curly '
+        name = name.replace("\u02bc", "'")  # modifier letter apostrophe ʼ
 
         # Standardize dash variants to ASCII hyphen-minus
-        name = name.replace("\u2013", "-")   # en dash –
-        name = name.replace("\u2014", "-")   # em dash —
+        name = name.replace("\u2013", "-")  # en dash –
+        name = name.replace("\u2014", "-")  # em dash —
 
         # Collapse whitespace
         name = " ".join(name.split())
@@ -249,9 +249,7 @@ class DataCleaner:
         logger.info("Cleaned DST projections: %d rows", len(out))
         return out
 
-    def clean_all(
-        self, data: dict[str, pd.DataFrame]
-    ) -> dict[str, pd.DataFrame]:
+    def clean_all(self, data: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
         """Clean all five DataFrames returned by FantasyProsIngester.read_all().
 
         Expects keys: rankings, qb, flex, k, dst.

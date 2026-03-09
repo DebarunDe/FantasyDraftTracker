@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 from src.draft_manager.draft_controller import DraftController
 from src.ui.config import COMMANDS, SEARCH_RESULTS_LIMIT
 
-
 # Name suffixes to strip for matching
 _SUFFIXES = (" jr.", " sr.", " iii", " ii", " iv", " v")
 
@@ -43,9 +42,7 @@ class PlayerSearcher:
 
         return {"type": "name", "query": stripped}
 
-    def search(
-        self, query: str, position: Optional[str] = None
-    ) -> List[Dict]:
+    def search(self, query: str, position: Optional[str] = None) -> List[Dict]:
         """Search available players by name.
 
         Multi-pass strategy:
@@ -63,26 +60,17 @@ class PlayerSearcher:
         available = self.controller.get_available_players(position=position)
 
         # Pass 1: Exact match
-        exact = [
-            p for p in available
-            if normalize_name(p["name"]) == query_norm
-        ]
+        exact = [p for p in available if normalize_name(p["name"]) == query_norm]
         if exact:
             return _sort_by_rank(exact)
 
         # Pass 2: Starts-with
-        starts = [
-            p for p in available
-            if normalize_name(p["name"]).startswith(query_norm)
-        ]
+        starts = [p for p in available if normalize_name(p["name"]).startswith(query_norm)]
         if starts:
             return _sort_by_rank(starts)
 
         # Pass 3: Substring
-        substring = [
-            p for p in available
-            if query_norm in normalize_name(p["name"])
-        ]
+        substring = [p for p in available if query_norm in normalize_name(p["name"])]
         if substring:
             return _sort_by_rank(substring)[:SEARCH_RESULTS_LIMIT]
 
@@ -90,17 +78,14 @@ class PlayerSearcher:
         tokens = query_norm.split()
         if tokens:
             token_match = [
-                p for p in available
-                if all(t in normalize_name(p["name"]) for t in tokens)
+                p for p in available if all(t in normalize_name(p["name"]) for t in tokens)
             ]
             return _sort_by_rank(token_match)[:SEARCH_RESULTS_LIMIT]
 
         return []
 
     @staticmethod
-    def resolve_by_number(
-        number: int, player_list: List[Dict]
-    ) -> Optional[Dict]:
+    def resolve_by_number(number: int, player_list: List[Dict]) -> Optional[Dict]:
         """Resolve a 1-based number selection from a displayed list."""
         if 1 <= number <= len(player_list):
             return player_list[number - 1]

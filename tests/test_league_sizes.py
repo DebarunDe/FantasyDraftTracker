@@ -1,6 +1,7 @@
 """Test VOR rankings across different league sizes."""
 
 import json
+
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
 
 # Load player data
@@ -9,8 +10,14 @@ with open("data/processed/players_2025.json", "r") as f:
     all_players = data["players"]
 
 roster_slots = {
-    "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-    "FLEX": 1, "K": 1, "DST": 1, "BENCH": 6,
+    "QB": 1,
+    "RB": 2,
+    "WR": 2,
+    "TE": 1,
+    "FLEX": 1,
+    "K": 1,
+    "DST": 1,
+    "BENCH": 6,
 }
 
 league_sizes = [8, 10, 12, 14]
@@ -40,8 +47,10 @@ for league_size in league_sizes:
     for i, player in enumerate(sorted_players[:24], 1):
         pos_counts[player.position] = pos_counts.get(player.position, 0) + 1
 
-    print(f"Top 24 Distribution: RB={pos_counts['RB']}  WR={pos_counts['WR']}  "
-          f"QB={pos_counts['QB']}  TE={pos_counts['TE']}")
+    print(
+        f"Top 24 Distribution: RB={pos_counts['RB']}  WR={pos_counts['WR']}  "
+        f"QB={pos_counts['QB']}  TE={pos_counts['TE']}"
+    )
 
     # Show key players
     key_players = {
@@ -59,7 +68,9 @@ for league_size in league_sizes:
         for i, player in enumerate(sorted_players[:48], 1):
             player_data = next((p for p in all_players if p["player_id"] == player.player_id), None)
             if player_data and player_data["name"] == target_name:
-                print(f"{target_name:<25} {target_pos:<5} #{i:<7} {player.base_vor:<12.2f} {player.dynamic_vor:<12.2f}")
+                print(
+                    f"{target_name:<25} {target_pos:<5} #{i:<7} {player.base_vor:<12.2f} {player.dynamic_vor:<12.2f}"
+                )
                 found = True
                 break
         if not found:

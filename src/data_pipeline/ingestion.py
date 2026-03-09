@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.data_pipeline.config import FILE_PATTERNS, QB_COLUMNS, FLEX_COLUMNS
+from src.data_pipeline.config import FILE_PATTERNS, FLEX_COLUMNS, QB_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +54,7 @@ class FantasyProsIngester:
         filename = FILE_PATTERNS[file_key].format(year=self.year)
         filepath = self.data_dir / filename
         if not filepath.exists():
-            raise FileNotFoundError(
-                f"Expected file not found: {filepath}"
-            )
+            raise FileNotFoundError(f"Expected file not found: {filepath}")
         return filepath
 
     # ------------------------------------------------------------------
@@ -170,7 +168,17 @@ class FantasyProsIngester:
         logger.info("Reading DST projections: %s", filepath.name)
 
         df = pd.read_csv(filepath, quotechar='"')
-        numeric_cols = ["SACK", "INT", "FR", "FF", "TD", "SAFETY", "PA", "YDS_AGN", "FPTS"]
+        numeric_cols = [
+            "SACK",
+            "INT",
+            "FR",
+            "FF",
+            "TD",
+            "SAFETY",
+            "PA",
+            "YDS_AGN",
+            "FPTS",
+        ]
         df = self._clean_projection_df(df, numeric_cols=numeric_cols)
         logger.info("Loaded %d DST projections", len(df))
         return df
@@ -178,9 +186,7 @@ class FantasyProsIngester:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _clean_projection_df(
-        self, df: pd.DataFrame, numeric_cols: list[str]
-    ) -> pd.DataFrame:
+    def _clean_projection_df(self, df: pd.DataFrame, numeric_cols: list[str]) -> pd.DataFrame:
         """Common cleanup for projection DataFrames.
 
         - Strips whitespace/quotes from string columns

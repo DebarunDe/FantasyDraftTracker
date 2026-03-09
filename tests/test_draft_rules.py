@@ -1,12 +1,10 @@
 """Tests for draft rules and pick validation."""
 
-import pytest
-
-from src.draft_manager.draft_rules import DraftRules, ValidationError
-from src.draft_manager.draft_state import DraftState, LeagueConfig, TeamRoster
-
+from src.draft_manager.draft_rules import DraftRules
+from src.draft_manager.draft_state import DraftState, LeagueConfig
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 def _make_league_config(**overrides):
     defaults = {
@@ -17,8 +15,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -29,12 +33,21 @@ def _make_player_data():
     """Create a small set of players with varied positions."""
     players = {}
     specs = [
-        ("qb1", "QB"), ("qb2", "QB"),
-        ("rb1", "RB"), ("rb2", "RB"), ("rb3", "RB"), ("rb4", "RB"),
-        ("wr1", "WR"), ("wr2", "WR"), ("wr3", "WR"),
-        ("te1", "TE"), ("te2", "TE"),
-        ("k1", "K"), ("k2", "K"),
-        ("dst1", "DST"), ("dst2", "DST"),
+        ("qb1", "QB"),
+        ("qb2", "QB"),
+        ("rb1", "RB"),
+        ("rb2", "RB"),
+        ("rb3", "RB"),
+        ("rb4", "RB"),
+        ("wr1", "WR"),
+        ("wr2", "WR"),
+        ("wr3", "WR"),
+        ("te1", "TE"),
+        ("te2", "TE"),
+        ("k1", "K"),
+        ("k2", "K"),
+        ("dst1", "DST"),
+        ("dst2", "DST"),
     ]
     for pid, pos in specs:
         players[pid] = {
@@ -60,6 +73,7 @@ def _make_draft_state(**config_overrides):
 
 # ── Valid Picks ──────────────────────────────────────────────────────
 
+
 class TestValidPicks:
     def test_valid_first_pick(self):
         state = _make_draft_state()
@@ -77,6 +91,7 @@ class TestValidPicks:
 
 
 # ── Invalid Picks ────────────────────────────────────────────────────
+
 
 class TestInvalidPicks:
     def test_wrong_team_turn(self):
@@ -116,6 +131,7 @@ class TestInvalidPicks:
 
 
 # ── Position Limits ──────────────────────────────────────────────────
+
 
 class TestPositionLimits:
     def test_allows_within_limit(self):
@@ -198,6 +214,7 @@ class TestPositionLimits:
 
 # ── Manual Tracker Mode ──────────────────────────────────────────────
 
+
 class TestManualTrackerMode:
     def test_allows_any_team_to_pick(self):
         """In manual tracker mode, any team can pick regardless of turn."""
@@ -209,6 +226,7 @@ class TestManualTrackerMode:
 
 
 # ── Draft Complete ───────────────────────────────────────────────────
+
 
 class TestIsDraftComplete:
     def test_not_complete_no_picks(self):
@@ -222,9 +240,15 @@ class TestIsDraftComplete:
         total = state.league_config.league_size * state.league_config.total_rounds()
         # Add dummy picks
         from src.draft_manager.draft_state import Pick
+
         for i in range(total):
             state.all_picks.append(
-                Pick(pick_number=i + 1, round=1, team_id=0,
-                     player_id=f"p{i}", timestamp="t")
+                Pick(
+                    pick_number=i + 1,
+                    round=1,
+                    team_id=0,
+                    player_id=f"p{i}",
+                    timestamp="t",
+                )
             )
         assert rules.is_draft_complete() is True

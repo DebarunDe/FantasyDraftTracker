@@ -9,16 +9,35 @@ from src.data_pipeline.run_update import run_pipeline
 
 # Required keys in every player dict
 _REQUIRED_PLAYER_KEYS = {
-    "player_id", "name", "position", "team",
-    "bye_week", "tier", "overall_rank", "position_rank",
-    "stats", "projections", "baseline_vor",
+    "player_id",
+    "name",
+    "position",
+    "team",
+    "bye_week",
+    "tier",
+    "overall_rank",
+    "position_rank",
+    "stats",
+    "projections",
+    "baseline_vor",
 }
 
 _REQUIRED_STAT_KEYS = {
-    "pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int",
-    "rush_att", "rush_yds", "rush_td",
-    "rec", "rec_yds", "rec_td", "fl",
-    "fg", "fga", "xpt",
+    "pass_att",
+    "pass_cmp",
+    "pass_yds",
+    "pass_td",
+    "pass_int",
+    "rush_att",
+    "rush_yds",
+    "rush_td",
+    "rec",
+    "rec_yds",
+    "rec_td",
+    "fl",
+    "fg",
+    "fga",
+    "xpt",
 }
 
 _SCORING_KEYS = {"standard", "half_ppr", "full_ppr"}
@@ -110,9 +129,7 @@ class TestRunPipeline:
 
         # Top 5 should all have significant VOR
         for p in top5:
-            assert p["baseline_vor"]["half_ppr"] > 10, (
-                f"Top player {p['name']} has low VOR"
-            )
+            assert p["baseline_vor"]["half_ppr"] > 10, f"Top player {p['name']} has low VOR"
 
         # Top 5 should include skill positions (QB/RB/WR/TE)
         top_positions = {p["position"] for p in top5}
@@ -168,9 +185,7 @@ class TestOutputFormat:
     def test_stat_values_are_numeric(self, players):
         for p in players[:20]:
             for key, val in p["stats"].items():
-                assert isinstance(val, (int, float)), (
-                    f"{p['name']} stat {key} is {type(val)}"
-                )
+                assert isinstance(val, (int, float)), f"{p['name']} stat {key} is {type(val)}"
 
     def test_player_ids_are_unique(self, players):
         ids = [p["player_id"] for p in players]

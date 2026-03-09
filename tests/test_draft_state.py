@@ -9,8 +9,8 @@ from src.draft_manager.draft_state import (
     TeamRoster,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 def _make_league_config(**overrides):
     defaults = {
@@ -21,8 +21,14 @@ def _make_league_config(**overrides):
         "draft_mode": "simulation",
         "data_year": 2025,
         "roster_slots": {
-            "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-            "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "DST": 1,
+            "K": 1,
+            "BENCH": 6,
         },
     }
     defaults.update(overrides)
@@ -59,17 +65,16 @@ def _make_draft_state(league_size=4, player_count=60, **config_overrides):
 
 # ── TeamRoster ───────────────────────────────────────────────────────
 
+
 class TestTeamRoster:
     def test_empty_roster_count(self):
-        roster = TeamRoster(team_id=0, team_name="T0", is_human=True,
-                            roster={"QB": [], "RB": []})
+        roster = TeamRoster(team_id=0, team_name="T0", is_human=True, roster={"QB": [], "RB": []})
         assert roster.get_roster_count("QB") == 0
         assert roster.get_roster_count("RB") == 0
         assert roster.get_roster_count("WR") == 0  # not in dict
 
     def test_add_player(self):
-        roster = TeamRoster(team_id=0, team_name="T0", is_human=True,
-                            roster={"QB": []})
+        roster = TeamRoster(team_id=0, team_name="T0", is_human=True, roster={"QB": []})
         roster.add_player("qb1", "QB")
         assert roster.get_roster_count("QB") == 1
         assert "qb1" in roster.picks
@@ -80,8 +85,7 @@ class TestTeamRoster:
         assert roster.get_roster_count("BENCH") == 1
 
     def test_get_total_picks(self):
-        roster = TeamRoster(team_id=0, team_name="T0", is_human=True,
-                            roster={"QB": []})
+        roster = TeamRoster(team_id=0, team_name="T0", is_human=True, roster={"QB": []})
         assert roster.get_total_picks() == 0
         roster.add_player("p1", "QB")
         roster.add_player("p2", "BENCH")
@@ -89,6 +93,7 @@ class TestTeamRoster:
 
 
 # ── Pick ─────────────────────────────────────────────────────────────
+
 
 class TestPick:
     def test_create(self):
@@ -101,6 +106,7 @@ class TestPick:
 
 
 # ── LeagueConfig ─────────────────────────────────────────────────────
+
 
 class TestLeagueConfig:
     def test_total_rounds(self):
@@ -122,6 +128,7 @@ class TestLeagueConfig:
 
 
 # ── DraftState.create_new ────────────────────────────────────────────
+
 
 class TestDraftStateCreation:
     def test_creates_correct_number_of_teams(self):
@@ -192,6 +199,7 @@ class TestDraftStateCreation:
 
 # ── DraftState methods ───────────────────────────────────────────────
 
+
 class TestDraftStateMethods:
     def test_get_current_team(self):
         state = _make_draft_state()
@@ -221,6 +229,7 @@ class TestDraftStateMethods:
 
 
 # ── Snake Draft Order ────────────────────────────────────────────────
+
 
 class TestSnakeDraftOrder:
     def test_round_1_forward(self):
@@ -293,6 +302,7 @@ class TestSnakeDraftOrder:
 
 # ── Draft Completion ─────────────────────────────────────────────────
 
+
 class TestDraftCompletion:
     def test_not_complete_at_start(self):
         state = _make_draft_state()
@@ -331,6 +341,7 @@ class TestDraftCompletion:
 
 # ── Traded Picks ──────────────────────────────────────────────────────
 
+
 class TestPickTrades:
     """Tests for apply_pick_trade() and the resulting draft order."""
 
@@ -353,8 +364,8 @@ class TestPickTrades:
         state.apply_pick_trade(from_team_id=1, round_num=1, to_team_id=0)
         state.apply_pick_trade(from_team_id=0, round_num=3, to_team_id=1)
         assert len(state.pick_trades) == 2
-        assert state.draft_order[0] == [0, 0, 2, 3]   # Round 1: Team 1 → Team 0
-        assert state.draft_order[2] == [1, 1, 2, 3]   # Round 3: Team 0 → Team 1
+        assert state.draft_order[0] == [0, 0, 2, 3]  # Round 1: Team 1 → Team 0
+        assert state.draft_order[2] == [1, 1, 2, 3]  # Round 3: Team 0 → Team 1
 
     def test_human_gets_extra_pick_in_round(self):
         """Team 0 receives another team's pick so it appears twice in that round."""
@@ -362,7 +373,7 @@ class TestPickTrades:
         state.apply_pick_trade(from_team_id=3, round_num=1, to_team_id=0)
         r1 = state.draft_order[0]
         assert r1.count(0) == 2  # Team 0 picks twice
-        assert 3 not in r1       # Team 3 does not pick
+        assert 3 not in r1  # Team 3 does not pick
 
     def test_apply_trade_invalid_round_raises(self):
         state = _make_draft_state(league_size=4)

@@ -1,9 +1,9 @@
 """Draft state data models - single source of truth for all draft information."""
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
-import uuid
 
 
 @dataclass
@@ -141,8 +141,7 @@ class DraftState:
             )
         if not 0 <= human_team_id < league_config.league_size:
             raise ValueError(
-                f"human_team_id ({human_team_id}) must be in range "
-                f"[0, {league_config.league_size})"
+                f"human_team_id ({human_team_id}) must be in range [0, {league_config.league_size})"
             )
         draft_id = str(uuid.uuid4())
 
@@ -176,9 +175,7 @@ class DraftState:
             pick_trades=[],
         )
 
-    def apply_pick_trade(
-        self, from_team_id: int, round_num: int, to_team_id: int
-    ) -> None:
+    def apply_pick_trade(self, from_team_id: int, round_num: int, to_team_id: int) -> None:
         """Transfer a pick from one team to another.
 
         Finds the first slot in round_num's draft order currently owned by
@@ -190,18 +187,12 @@ class DraftState:
         """
         league_size = self.league_config.league_size
         if not 0 <= from_team_id < league_size:
-            raise ValueError(
-                f"from_team_id {from_team_id} is out of range [0, {league_size - 1}]"
-            )
+            raise ValueError(f"from_team_id {from_team_id} is out of range [0, {league_size - 1}]")
         if not 0 <= to_team_id < league_size:
-            raise ValueError(
-                f"to_team_id {to_team_id} is out of range [0, {league_size - 1}]"
-            )
+            raise ValueError(f"to_team_id {to_team_id} is out of range [0, {league_size - 1}]")
         total_rounds = self.league_config.total_rounds()
         if not 1 <= round_num <= total_rounds:
-            raise ValueError(
-                f"round_num {round_num} is out of range [1, {total_rounds}]"
-            )
+            raise ValueError(f"round_num {round_num} is out of range [1, {total_rounds}]")
 
         round_slots = self.draft_order[round_num - 1]
         for i, team_id in enumerate(round_slots):
@@ -216,9 +207,7 @@ class DraftState:
                 )
                 return
 
-        raise ValueError(
-            f"Team {from_team_id} does not have a pick in Round {round_num}"
-        )
+        raise ValueError(f"Team {from_team_id} does not have a pick in Round {round_num}")
 
     def get_current_team(self) -> TeamRoster:
         """Get the team currently on the clock."""
@@ -243,9 +232,7 @@ class DraftState:
 
         self.current_pick += 1
 
-        self.current_round = (
-            (self.current_pick - 1) // self.league_config.league_size
-        ) + 1
+        self.current_round = ((self.current_pick - 1) // self.league_config.league_size) + 1
 
         round_idx = self.current_round - 1
         picks_in_round = (self.current_pick - 1) % self.league_config.league_size

@@ -126,8 +126,11 @@ def run_pipeline(
     raw = ingester.read_all()
     logger.info(
         "Loaded: %d rankings, %d QBs, %d FLEX, %d Ks, %d DSTs",
-        len(raw["rankings"]), len(raw["qb"]),
-        len(raw["flex"]), len(raw["k"]), len(raw["dst"]),
+        len(raw["rankings"]),
+        len(raw["qb"]),
+        len(raw["flex"]),
+        len(raw["k"]),
+        len(raw["dst"]),
     )
 
     # 2. Clean

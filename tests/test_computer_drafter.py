@@ -1,15 +1,15 @@
 """Tests for ComputerDrafter — Milestone 9: ADP-blended AI opponent."""
 
-import pytest
+from typing import Dict
+from unittest.mock import MagicMock
+
 import numpy as np
-from unittest.mock import MagicMock, patch
-from typing import Dict, List
+import pytest
 
 from src.simulation_engine.computer_drafter import ComputerDrafter
+from src.simulation_engine.config import ADP_BLEND_STRATEGIES
 from src.simulation_engine.models import VORResult
-from src.simulation_engine.config import ADP_BLEND_STRATEGIES, COMPUTER_ADP_WEIGHT
 from src.simulation_engine.vor_calculator import DynamicVORCalculator
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -91,16 +91,12 @@ class TestComputerDrafterInit:
 
     def test_explicit_adp_weight_overrides_strategy(self):
         vor_calc = _make_vor_calculator()
-        drafter = ComputerDrafter(
-            vor_calculator=vor_calc, strategy="balanced", adp_weight=0.9
-        )
+        drafter = ComputerDrafter(vor_calculator=vor_calc, strategy="balanced", adp_weight=0.9)
         assert drafter.adp_weight == 0.9
 
     def test_explicit_adp_weight_zero_overrides_strategy(self):
         vor_calc = _make_vor_calculator()
-        drafter = ComputerDrafter(
-            vor_calculator=vor_calc, strategy="consensus", adp_weight=0.0
-        )
+        drafter = ComputerDrafter(vor_calculator=vor_calc, strategy="consensus", adp_weight=0.0)
         assert drafter.adp_weight == 0.0
 
     def test_unknown_strategy_without_explicit_weight_raises(self):
@@ -110,9 +106,7 @@ class TestComputerDrafterInit:
 
     def test_unknown_strategy_with_explicit_adp_weight_is_allowed(self):
         vor_calc = _make_vor_calculator()
-        drafter = ComputerDrafter(
-            vor_calculator=vor_calc, strategy="custom", adp_weight=0.3
-        )
+        drafter = ComputerDrafter(vor_calculator=vor_calc, strategy="custom", adp_weight=0.3)
         assert drafter.adp_weight == 0.3
 
     def test_strategy_stored(self):
@@ -159,7 +153,10 @@ class TestRankByVOR:
 class TestComputeBlendedScores:
     def test_returns_score_for_every_available_player(self):
         drafter = _make_drafter("balanced")
-        players = [_make_player("a", "RB", overall_rank=1), _make_player("b", "WR", overall_rank=2)]
+        players = [
+            _make_player("a", "RB", overall_rank=1),
+            _make_player("b", "WR", overall_rank=2),
+        ]
         vor_results = {
             "a": _make_vor_result("a", "RB", dynamic_vor=80.0),
             "b": _make_vor_result("b", "WR", dynamic_vor=40.0),
@@ -238,8 +235,8 @@ class TestComputeBlendedScores:
         # Use 10 players so rank differences are small (0.1 apart) and in-range
         players = [_make_player(f"p{i}", "RB", overall_rank=i) for i in range(1, 11)]
         # Player p10 has worst VOR (rank 10) but best ADP (rank 1) among 10 players
-        players[-1]["overall_rank"] = 1    # p10 → #1 ADP
-        players[0]["overall_rank"] = 10    # p1  → #10 ADP (worst)
+        players[-1]["overall_rank"] = 1  # p10 → #1 ADP
+        players[0]["overall_rank"] = 10  # p1  → #10 ADP (worst)
         vor_results = {
             f"p{i}": _make_vor_result(f"p{i}", "RB", dynamic_vor=float(11 - i) * 10)
             for i in range(1, 11)
@@ -256,7 +253,7 @@ class TestComputeBlendedScores:
         """adp_weight=0.0 means composite equals VOR score only."""
         drafter = _make_drafter("vor_only")
         players = [
-            _make_player("a", "WR", overall_rank=1),   # great ADP, poor VOR
+            _make_player("a", "WR", overall_rank=1),  # great ADP, poor VOR
             _make_player("b", "RB", overall_rank=200),  # bad ADP, great VOR
         ]
         vor_results = {
@@ -343,8 +340,7 @@ class TestMakePick:
         """Create a ComputerDrafter whose VOR calculator always returns vor_map."""
         vor_calc = MagicMock()
         vor_results = {
-            pid: _make_vor_result(pid, "RB", dynamic_vor=v)
-            for pid, v in vor_map.items()
+            pid: _make_vor_result(pid, "RB", dynamic_vor=v) for pid, v in vor_map.items()
         }
         vor_calc.calculate_from_draft_state.return_value = vor_results
         drafter = ComputerDrafter(vor_calculator=vor_calc, strategy=strategy)
@@ -368,8 +364,8 @@ class TestMakePick:
         drafter = self._build_drafter_with_mock_vor("vor_only", vor_map)
         players = [
             _make_player("rb1", "RB", overall_rank=50),  # poor ADP
-            _make_player("wr1", "WR", overall_rank=1),   # great ADP
-            _make_player("qb1", "QB", overall_rank=2),   # great ADP
+            _make_player("wr1", "WR", overall_rank=1),  # great ADP
+            _make_player("qb1", "QB", overall_rank=2),  # great ADP
         ]
         draft_state = MagicMock()
         pick = drafter.make_pick(draft_state, players, team_id=0)
@@ -446,10 +442,16 @@ class TestMakePickWithRealDraftState:
             league_size=12,
             scoring_format="half_ppr",
             roster_slots={
-                "QB": 1, "RB": 2, "WR": 2, "TE": 1,
-                "FLEX": 1, "DST": 1, "K": 1, "BENCH": 6,
+                "QB": 1,
+                "RB": 2,
+                "WR": 2,
+                "TE": 1,
+                "FLEX": 1,
+                "DST": 1,
+                "K": 1,
+                "BENCH": 6,
             },
-            team_names=[f"Team {i+1}" for i in range(12)],
+            team_names=[f"Team {i + 1}" for i in range(12)],
             human_team_id=0,
         )
         return state
@@ -465,9 +467,7 @@ class TestMakePickWithRealDraftState:
             vor_calc = DynamicVORCalculator("half_ppr", league_size=12)
             drafter = ComputerDrafter(vor_calculator=vor_calc, strategy=strategy)
             pick = drafter.make_pick(draft_state, available, team_id=0)
-            assert pick in available_ids, (
-                f"Strategy '{strategy}' returned invalid pick: {pick}"
-            )
+            assert pick in available_ids, f"Strategy '{strategy}' returned invalid pick: {pick}"
 
     def test_balanced_drafter_picks_a_reasonable_player(self, draft_state):
         """Balanced drafter's first pick should be a top-tier skill player, not K/DST."""

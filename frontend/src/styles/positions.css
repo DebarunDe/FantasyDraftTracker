@@ -1,0 +1,46 @@
+/* Position color palette — mirrors FantasyPros DraftWizard */
+:root {
+  --color-qb: #ef4444;
+  --color-rb: #22c55e;
+  --color-wr: #3b82f6;
+  --color-te: #f59e0b;
+  --color-k: #6b7280;
+  --color-dst: #a855f7;
+  --color-flex: #0ea5e9;
+  --color-bench: #94a3b8;
+
+  /* Lighter tints for tile backgrounds */
+  --bg-qb: rgba(239, 68, 68, 0.15);
+  --bg-rb: rgba(34, 197, 94, 0.15);
+  --bg-wr: rgba(59, 130, 246, 0.15);
+  --bg-te: rgba(245, 158, 11, 0.15);
+  --bg-k: rgba(107, 114, 128, 0.15);
+  --bg-dst: rgba(168, 85, 247, 0.15);
+}
+
+.pos-qb { background-color: var(--color-qb); }
+.pos-rb { background-color: var(--color-rb); }
+.pos-wr { background-color: var(--color-wr); }
+.pos-te { background-color: var(--color-te); }
+.pos-k  { background-color: var(--color-k);  }
+.pos-dst{ background-color: var(--color-dst); }
+
+.pos-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.pos-badge.QB  { background-color: var(--color-qb); }
+.pos-badge.RB  { background-color: var(--color-rb); }
+.pos-badge.WR  { background-color: var(--color-wr); }
+.pos-badge.TE  { background-color: var(--color-te); }
+.pos-badge.K   { background-color: var(--color-k);  }
+.pos-badge.DST { background-color: var(--color-dst); }
+.pos-badge.FLEX{ background-color: var(--color-flex); }
+.pos-badge.BENCH{ background-color: var(--color-bench); }

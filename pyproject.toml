@@ -1,0 +1,40 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E: pycodestyle errors, F: pyflakes, W: pycodestyle warnings, I: isort
+select = ["E", "F", "W", "I"]
+ignore = [
+  "E501",  # line too long — enforced by formatter, not linter
+  "E402",  # module import not at top (one legitimate case in codebase)
+  "F841",  # unused variable (often intentional in draft logic)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"
+markers = [
+  "slow: wall-clock performance tests — run locally, skipped in CI (deselect with '-m not slow')",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/ui/*", "venv/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]
