@@ -4,21 +4,7 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
-from src.ui.config import REACH_STEAL_LABEL_THRESHOLD, STEAL_STRONG_THRESHOLD
-
-
-def _reach_label(delta: int) -> str:
-    """Return a plain-text reach/steal label for a given pick delta.
-
-    delta = pick_number - overall_rank  (positive = steal, negative = reach)
-    """
-    if delta >= STEAL_STRONG_THRESHOLD:
-        return "STEAL"
-    if delta >= REACH_STEAL_LABEL_THRESHOLD:
-        return "Value"
-    if delta <= -REACH_STEAL_LABEL_THRESHOLD:
-        return "REACH"
-    return ""
+from src.ui.config import reach_label
 
 
 class DraftExporter:
@@ -74,7 +60,7 @@ class DraftExporter:
                 proj = info.get("projections", {}).get(scoring_format, 0)
                 adp = info.get("overall_rank")
                 delta = pick.pick_number - adp if adp is not None else 0
-                label = _reach_label(delta) if adp is not None else ""
+                label = reach_label(delta) if adp is not None else ""
                 writer.writerow(
                     [
                         pick.pick_number,

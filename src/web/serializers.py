@@ -4,7 +4,7 @@ from typing import Dict
 
 from src.draft_manager.draft_state import DraftState
 from src.simulation_engine.models import Recommendation
-from src.ui.config import REACH_STEAL_LABEL_THRESHOLD, STEAL_STRONG_THRESHOLD
+from src.ui.config import reach_label
 from src.web.schemas import (
     CurrentStateResponse,
     DraftSummaryResponse,
@@ -14,17 +14,6 @@ from src.web.schemas import (
     RecommendationResponse,
     TeamResponse,
 )
-
-
-def _reach_label(delta: int) -> str:
-    """Return a plain-text reach/steal label given (pick_number - overall_rank)."""
-    if delta >= STEAL_STRONG_THRESHOLD:
-        return "STEAL"
-    if delta >= REACH_STEAL_LABEL_THRESHOLD:
-        return "Value"
-    if delta <= -REACH_STEAL_LABEL_THRESHOLD:
-        return "REACH"
-    return ""
 
 
 def draft_state_to_response(state: DraftState) -> DraftSummaryResponse:
@@ -48,7 +37,7 @@ def draft_state_to_response(state: DraftState) -> DraftSummaryResponse:
                 slot=pick.slot,
                 timestamp=pick.timestamp,
                 reach_delta=delta,
-                reach_label=_reach_label(delta) if delta is not None else "",
+                reach_label=reach_label(delta) if delta is not None else "",
             )
         )
 

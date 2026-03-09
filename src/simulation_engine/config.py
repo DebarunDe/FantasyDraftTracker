@@ -6,7 +6,6 @@
 # slower machines.
 MC_NUM_SIMULATIONS = 200
 MC_SIMULATION_DEPTH = 5  # Rounds to simulate ahead
-MC_PARALLEL_WORKERS = 4  # CPU cores for parallel simulation
 
 # VOR calculation parameters
 # Scarcity weights tuned for realistic early-round balance:
@@ -82,7 +81,6 @@ TIER_URGENCY_WEIGHT = 1.5
 # player JSON from the data pipeline. No new data source is needed.
 
 COMPUTER_STRATEGY = "balanced"  # Default for all computer teams
-COMPUTER_PERSONALITY_VARIANCE = 0.05  # Reserved for future use
 
 # Default ADP blend weight (0.0 = pure VOR, 1.0 = pure ADP)
 COMPUTER_ADP_WEIGHT = 0.4  # 60% VOR + 40% ADP → realistic human-like drafting

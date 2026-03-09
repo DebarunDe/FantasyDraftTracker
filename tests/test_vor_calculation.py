@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.data_pipeline.config import VOR_BASELINE_COUNTS
+from src.data_pipeline.config import VOR_PER_TEAM_WEIGHTS, calculate_baseline_count
 
 # ── Synthetic data helpers ────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ class TestCalculateBaselineVOR:
         df = _make_multi_position_df()
         result = vor_calculator.calculate_baseline_vor(df)
 
-        for position in VOR_BASELINE_COUNTS:
+        for position in VOR_PER_TEAM_WEIGHTS:
             pos_df = result[result["Position"] == position]
             if pos_df.empty:
                 continue
@@ -78,7 +78,8 @@ class TestCalculateBaselineVOR:
         df = _make_multi_position_df()
         result = vor_calculator.calculate_baseline_vor(df)
 
-        for position, baseline in VOR_BASELINE_COUNTS.items():
+        for position in VOR_PER_TEAM_WEIGHTS:
+            baseline = calculate_baseline_count(position, 12)
             pos_df = result[result["Position"] == position].sort_values(
                 "VOR_FullPPR", ascending=False
             )
@@ -94,7 +95,8 @@ class TestCalculateBaselineVOR:
         df = _make_multi_position_df()
         result = vor_calculator.calculate_baseline_vor(df)
 
-        for position, baseline in VOR_BASELINE_COUNTS.items():
+        for position in VOR_PER_TEAM_WEIGHTS:
+            baseline = calculate_baseline_count(position, 12)
             pos_df = result[result["Position"] == position].sort_values(
                 "VOR_FullPPR", ascending=False
             )
@@ -154,7 +156,7 @@ class TestCalculateBaselineVOR:
         df = _make_multi_position_df()
         result = vor_calculator.calculate_baseline_vor(df)
 
-        for position in VOR_BASELINE_COUNTS:
+        for position in VOR_PER_TEAM_WEIGHTS:
             pos_df = result[result["Position"] == position]
             assert pos_df["VOR_FullPPR"].notna().all(), f"All {position} players should have VOR"
 
@@ -185,7 +187,7 @@ class TestVORWithRealData:
     def test_every_position_has_positive_vor_players(self, vor_calculator, transformed_data):
         result = vor_calculator.calculate_baseline_vor(transformed_data)
 
-        for position in VOR_BASELINE_COUNTS:
+        for position in VOR_PER_TEAM_WEIGHTS:
             pos_positive = result[(result["Position"] == position) & (result["VOR_HalfPPR"] > 0)]
             assert len(pos_positive) > 0, f"No positive-VOR players at {position}"
 

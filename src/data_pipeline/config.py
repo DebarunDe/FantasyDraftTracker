@@ -33,16 +33,6 @@ VOR_PER_TEAM_WEIGHTS = {
     "DST": 0.75,  # 1 starter, minimal bench (devalued per research)
 }
 
-# Legacy constant for backward compatibility (12-team league)
-VOR_BASELINE_COUNTS = {
-    "QB": 18,  # 1.5 * 12
-    "RB": 40,  # 3.3 * 12 (rounded)
-    "WR": 41,  # 3.4 * 12 (rounded)
-    "TE": 14,  # 1.2 * 12 (rounded)
-    "K": 9,  # 0.75 * 12
-    "DST": 9,  # 0.75 * 12
-}
-
 
 def calculate_baseline_count(position: str, league_size: int) -> int:
     """Calculate VOR baseline count for a position based on league size.

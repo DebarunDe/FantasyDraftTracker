@@ -11,7 +11,8 @@ from rich.console import Console
 
 from src.draft_manager.draft_state import DraftState, LeagueConfig, Pick
 from src.ui.cli import DraftApp
-from src.ui.export import DraftExporter, _reach_label
+from src.ui.config import reach_label as _reach_label
+from src.ui.export import DraftExporter
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
