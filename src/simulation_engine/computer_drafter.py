@@ -95,7 +95,27 @@ class ComputerDrafter:
             raise ValueError("No available players to pick from")
 
         vor_results = self.vor_calculator.calculate_from_draft_state(draft_state, team_id)
-        scores = self._compute_blended_scores(available_players, vor_results)
+
+        # Separate eligible from hard-ineligible players.
+        # The VOR system uses exact sentinel values that mean "do not draft this":
+        #   -100.0 : hard cap exceeded (position filled beyond bench allowance),
+        #            or K/DST starting slot already filled (streaming penalty)
+        #   -50.0  : K/DST before 65% draft completion (too early to stream)
+        # We match these exactly rather than using a threshold so that genuine
+        # late-round players with deeply negative *calculated* VOR (e.g. -60 for
+        # a bench RB on a team with few RBs but terrible remaining options) still
+        # enter the eligible pool.  A fixed threshold would accidentally exclude
+        # those real picks and trigger the fallback, letting ADP override the cap.
+        # Fall back to all players only if every player is ineligible (edge case).
+        _INELIGIBLE_VOR = {-100.0, -50.0}
+        eligible = [
+            p for p in available_players
+            if vor_results.get(p["player_id"]) is None
+            or vor_results[p["player_id"]].dynamic_vor not in _INELIGIBLE_VOR
+        ]
+        pool = eligible if eligible else available_players
+
+        scores = self._compute_blended_scores(pool, vor_results)
 
         if not scores:
             # Fallback: return first available player (should never happen)
