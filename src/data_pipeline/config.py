@@ -20,15 +20,18 @@ SCORING_FORMATS = {
 #
 # Formula: baseline_count = per_team_weight * league_size
 #
-# These weights represent:
-# - Starting slots at the position
-# - Share of FLEX slots (for RB/WR/TE)
-# - Typical bench allocation for the position
+# These weights represent the empirically-derived replacement player for each
+# position (FFTradingRoom 15-season analysis, flex-adjusted):
+# - QB: QB18 is the effective replacement in 1-QB leagues (BEER+ streaming methodology)
+# - RB: RB28 flex-adjusted replacement (2 starters + FLEX share, empirically 28.3)
+# - WR: WR41 flex-adjusted replacement (WRs dominate 75% of flex spots historically)
+# - TE: TE14 replacement (1 starter + minimal FLEX share)
+# - K/DST: minimal depth; streaming-only positions
 VOR_PER_TEAM_WEIGHTS = {
-    "QB": 1.5,  # 1 starter + 0.5 bench depth
-    "RB": 3.3,  # 2 starters + 0.4 FLEX share + 0.9 bench depth
-    "WR": 3.4,  # 3 starters + 0.4 FLEX share + minimal bench
-    "TE": 1.2,  # 1 starter + 0.2 FLEX share + minimal bench
+    "QB": 1.5,  # QB18: BEER+ streaming-adjusted replacement (above QB12 starter cutoff)
+    "RB": 2.33,  # RB28: flex-adjusted empirical replacement (was 3.3/RB40 — too deep)
+    "WR": 3.4,  # WR41: flex-dominant replacement (WRs fill ~75% of flex spots)
+    "TE": 1.2,  # TE14: just above starter cutoff
     "K": 0.75,  # 1 starter, minimal bench (devalued per research)
     "DST": 0.75,  # 1 starter, minimal bench (devalued per research)
 }

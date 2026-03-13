@@ -9,19 +9,27 @@ MC_SIMULATION_DEPTH = 5  # Rounds to simulate ahead
 
 # VOR calculation parameters
 # Scarcity weights tuned for realistic early-round balance:
-# - RB: Steepest initial dropoff → 1.5 (reduced from 1.8 for balance)
-# - WR: Increased to match RB → 1.5 (increased from 1.4 for better early-round value)
-# - TE: Significant scarcity after top tier → 1.6
-# - QB: Steep decline after top 10 → 1.3
-# - K/DST: Minimal dropoff (late-round targets) → 0.3
+# - RB: Steepest talent cliff, no streaming option → 1.5
+# - WR: Deep position but steep elite tier dropoff → 1.5
+# - TE: Significant scarcity after top 3-5 tier → 1.6
+# - QB: Reduced from 1.3 → 0.8: QB is the LEAST scarce skill position in 1-QB leagues
+#       (30+ viable starters for 12 slots); BEER+ streaming methodology confirms lower weight
+# - K/DST: Minimal dropoff (streaming-only positions) → 0.3
 POSITION_SCARCITY_WEIGHTS = {
-    "QB": 1.3,
+    "QB": 0.8,  # Reduced from 1.3: least positionally scarce skill position in 1-QB leagues
     "RB": 1.5,
     "WR": 1.5,
     "TE": 1.6,
     "K": 0.3,
     "DST": 0.3,
 }
+
+# QB streaming discount for single-QB leagues (BEER+ methodology).
+# QBs are the most "streamable" position — viable waiver QBs score ~250-270 FPTS,
+# making the elite-QB premium only ~1 PPG over a mid-tier streamer.
+# Applied as a multiplier to QB dynamic VOR in DynamicVORCalculator.
+# Effect: Allen moves from rank ~15 to ~19-22; Hurts from ~20 to ~30-35.
+QB_STREAMING_DISCOUNT = 0.65
 
 # Roster need multiplier weights (calibrated to empirical draft outcomes)
 ROSTER_NEED_WEIGHT = 0.6  # Boost for unfilled starting slots
@@ -34,19 +42,50 @@ ROSTER_EXCESS_PENALTY = 0.15  # Further penalty per extra player beyond starters
 # single-slot positions (QB/TE → 1-2 slots). This pushes QBs into round 3+ in ADP.
 NEED_NORMALIZATION = 3.0
 
-# Position-specific hard caps on total players (starting + bench).
-# Applied AFTER progressive excess penalties to absolutely prevent hoarding.
-# RB/WR have 3 starting slots (2+FLEX) so cap at 7 (4 excess).
-# QB/TE have 1-2 starting slots so cap tighter at 3 total.
-# K/DST: 1 starting slot; cap at 2 to allow one streamer backup max.
-POSITION_HARD_CAPS = {
-    "QB": 3,  # 1 starter + 2 max bench depth
-    "RB": 7,  # 3 starting + 4 bench max
-    "WR": 7,  # 3 starting + 4 bench max
-    "TE": 3,  # 2 starting (1 TE + FLEX share) + 1 bench
-    "K": 2,  # 1 starter + 1 backup max
-    "DST": 2,  # 1 starter + 1 backup max
+# Positions eligible for the FLEX slot (shared with vor_calculator to avoid
+# a circular import when compute_position_caps is used by monte_carlo).
+FLEX_ELIGIBLE_POSITIONS: frozenset = frozenset({"RB", "WR", "TE"})
+
+# Per-position bench depth allowance on top of starting slots.
+# Hard cap = starting_slots(pos, roster_slots) + POSITION_BENCH_ALLOWANCE[pos]
+# where starting_slots already includes the FLEX slot for eligible positions.
+# This makes hard caps fully configurable: a 5-RB / 2-WR league automatically
+# gets higher RB caps and lower WR caps without touching this dict.
+POSITION_BENCH_ALLOWANCE = {
+    "QB": 1,  # 1 bye-week backup (streaming position)
+    "RB": 2,  # 2 bench for injury insurance
+    "WR": 2,  # 2 bench for matchup flexibility
+    "TE": 0,  # FLEX slot already counts; no extra bench (streaming-friendly)
+    "K": 1,  # 1 bye-week backup
+    "DST": 1,  # 1 bye-week backup
 }
+
+
+def compute_position_caps(roster_slots: dict) -> dict:
+    """Compute hard caps per position from actual roster slots + bench allowance.
+
+    Formula per position:
+        starting = roster_slots[pos] + roster_slots["FLEX"]  (if FLEX-eligible)
+        cap      = starting + POSITION_BENCH_ALLOWANCE[pos]
+
+    Examples (standard 12-team: QB=1, RB=2, WR=3, TE=1, FLEX=1):
+        QB  → 1 + 0 + 1 = 2   (1 starter + 1 backup)
+        RB  → 2 + 1 + 2 = 5   (2 starters + FLEX + 2 bench)
+        WR  → 3 + 1 + 2 = 6   (3 starters + FLEX + 2 bench)
+        TE  → 1 + 1 + 0 = 2   (1 starter + FLEX credit)
+
+    For a 5-RB / 2-WR league (RB=5, WR=2, FLEX=1):
+        RB  → 5 + 1 + 2 = 8
+        WR  → 2 + 1 + 2 = 5
+    """
+    caps: dict = {}
+    for pos, allowance in POSITION_BENCH_ALLOWANCE.items():
+        starting = roster_slots.get(pos, 0)
+        if pos in FLEX_ELIGIBLE_POSITIONS:
+            starting += roster_slots.get("FLEX", 0)
+        caps[pos] = starting + allowance
+    return caps
+
 
 # Position uncertainty (based on Harvard study R² values)
 # Higher uncertainty = less predictable projections
@@ -69,10 +108,15 @@ TIER_GAP_THRESHOLD = 0.15  # 15% VOR drop between adjacent players = tier bounda
 
 # Tier urgency boost: rewards drafting players who are uniquely scarce within their tier.
 # Applied as: urgency = 1 + (gap_to_next_tier / tier_size × TIER_URGENCY_WEIGHT)
-# Example: Chase alone in WR Tier 1 (28% gap): urgency = 1 + 0.28/1 × 1.5 = 1.42
-# Example: Allen + Jackson in QB Tier 1 of 2 (17% gap): urgency = 1 + 0.17/2 × 1.5 = 1.13
-# Example: Saquon in RB Tier 1 of 23 (24% gap): urgency = 1 + 0.24/23 × 1.5 = 1.016
-TIER_URGENCY_WEIGHT = 1.5
+# Reduced from 1.5 → 1.0 to prevent over-inflation of solo-tier players (especially
+# elite TEs like Kittle who sit alone in TE Tier 1 and were being pushed to round 1).
+# At 1.0: Kittle urgency = 1 + 0.22/1 × 1.0 = 1.22 (rank ~20, correct for round 2)
+# At 1.5: Kittle urgency = 1 + 0.22/1 × 1.5 = 1.33 (rank ~11, too early for round 1)
+# Chase still ranks #1-2 since his high base VOR dominates regardless of urgency weight.
+# Example: Chase alone in WR Tier 1 (26% gap): urgency = 1 + 0.26/1 × 1.0 = 1.26
+# Example: Allen + Jackson in QB Tier 1 of 2 (17% gap): urgency = 1 + 0.17/2 × 1.0 = 1.09
+# Example: Saquon in RB Tier 1 of 23 (24% gap): urgency = 1 + 0.24/23 × 1.0 = 1.01
+TIER_URGENCY_WEIGHT = 1.0
 
 # ── Computer drafter parameters ───────────────────────────────────────────────
 # ADP-blended composite scoring for realistic AI opponents.

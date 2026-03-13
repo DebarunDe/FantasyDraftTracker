@@ -8,14 +8,14 @@ import logging
 from collections import defaultdict
 from typing import Dict, List, Optional
 
-from src.data_pipeline.config import calculate_baseline_count
 from src.simulation_engine.config import (
     EARLY_ROUND_THRESHOLD,
+    FLEX_ELIGIBLE_POSITIONS,
     LATE_ROUND_THRESHOLD,
-    NEED_NORMALIZATION,
-    POSITION_HARD_CAPS,
+    POSITION_BENCH_ALLOWANCE,
     POSITION_SCARCITY_WEIGHTS,
     POSITION_UNCERTAINTY,
+    QB_STREAMING_DISCOUNT,
     ROSTER_EXCESS_PENALTY,
     ROSTER_FILLED_PENALTY,
     ROSTER_NEED_WEIGHT,
@@ -26,7 +26,26 @@ from src.simulation_engine.models import VORResult
 
 logger = logging.getLogger(__name__)
 
-FLEX_ELIGIBLE_POSITIONS = {"RB", "WR", "TE"}
+# Imported from config; defined here as alias for readability within this module.
+# Do not redefine — use the canonical FLEX_ELIGIBLE_POSITIONS from config.
+
+
+def _compute_need_normalization(roster_slots: dict) -> float:
+    """Return the max starting slots for any tracked position in this league config.
+
+    Used to normalise the need boost so that positions with more slots get
+    proportionally larger boosts regardless of the league format.
+
+    Examples:
+        Standard 2RB/3WR/1FLEX:  max(1, 3, 4, 2, 1, 1) = 4
+        8RB/3WR/1FLEX league:    max(1, 9, 4, 2, 1, 1) = 9
+    """
+    max_slots = max(
+        roster_slots.get(pos, 0)
+        + (roster_slots.get("FLEX", 0) if pos in FLEX_ELIGIBLE_POSITIONS else 0)
+        for pos in POSITION_BENCH_ALLOWANCE
+    )
+    return max(float(max_slots), 1.0)
 
 
 class DynamicVORCalculator:
@@ -85,6 +104,11 @@ class DynamicVORCalculator:
         Returns:
             Dict mapping ``player_id`` to :class:`VORResult`.
         """
+        # Dynamic need normalisation — max starting slots for any position in this
+        # league config.  Computed once here so all per-player need calculations use
+        # the same denominator without re-iterating roster_slots each iteration.
+        need_normalization = _compute_need_normalization(roster_slots)
+
         # Single-pass: compute position ranks AND tier info together (one sort per
         # position instead of two separate sort passes).
         position_ranks, position_tiers = self._compute_ranks_and_tiers(available_players)
@@ -110,10 +134,11 @@ class DynamicVORCalculator:
             scarcity = self._calculate_scarcity_multiplier(
                 position,
                 drafted_positions.get(position, 0),
+                roster_slots,
             )
 
             filled, total = pos_slot_cache[position]
-            need = self._need_from_slot_counts(filled, total, position)
+            need = self._need_from_slot_counts(filled, total, position, need_normalization)
 
             # Get tier information
             tier_info = position_tiers.get(position, {}).get(player_id, {})
@@ -158,9 +183,19 @@ class DynamicVORCalculator:
                 # Skill positions: dynamic_vor = base_vor * scarcity * need * uncertainty * tier_urgency
                 dynamic_vor = base_vor * scarcity * need * uncertainty_adj * tier_urgency
 
-                # Hard cap: apply position-specific max total players
-                hard_cap = POSITION_HARD_CAPS.get(position)
-                if hard_cap is not None and filled >= hard_cap:
+                # QB streaming discount (single-QB leagues, BEER+ methodology):
+                # QBs are the most streamable position — viable waiver QBs score ~250-270 FPTS,
+                # making the elite-QB premium only ~1 PPG over a mid-tier streamer.
+                # Applied after all other multipliers so every component remains interpretable.
+                if position == "QB":
+                    dynamic_vor *= QB_STREAMING_DISCOUNT
+
+                # Hard cap: derived from actual roster slots + bench allowance so
+                # any league format (5-RB, 2-WR, 2-FLEX, etc.) is handled correctly.
+                # cap = starting_slots_for_position + POSITION_BENCH_ALLOWANCE[pos]
+                # `total` is already the starting-slot count (pos + FLEX if eligible).
+                hard_cap = total + POSITION_BENCH_ALLOWANCE.get(position, 1)
+                if filled >= hard_cap:
                     dynamic_vor = -100.0
 
             results[player_id] = VORResult(
@@ -244,6 +279,7 @@ class DynamicVORCalculator:
         self,
         position: str,
         drafted_count: int,
+        roster_slots: dict,
     ) -> float:
         """Scarcity multiplier based on league-wide drafted percentage.
 
@@ -256,10 +292,20 @@ class DynamicVORCalculator:
 
             scarcity = 1 - (drafted_pct * position_weight)
 
+        ``total_startable`` is derived from actual roster configuration:
+        ``(position_slots + FLEX_slots if eligible) × league_size``.
+        This ensures scarcity correctly reflects non-standard formats
+        (e.g. an 8-RB league has a much larger RB denominator than a 2-RB league).
+
         K/DST are interchangeable, so their value DROPS as league fills positions.
         When no players have been drafted the multiplier is 1.0 for all positions.
         """
-        total_startable = calculate_baseline_count(position, self.league_size)
+        pos_slots = roster_slots.get(position, 0)
+        if position in FLEX_ELIGIBLE_POSITIONS:
+            pos_slots += roster_slots.get("FLEX", 0)
+        total_startable = pos_slots * self.league_size
+        if total_startable == 0:
+            return 1.0
         drafted_pct = min(drafted_count / total_startable, 1.0)
         weight = POSITION_SCARCITY_WEIGHTS.get(position, 1.0)
 
@@ -294,16 +340,25 @@ class DynamicVORCalculator:
         in both the filled and total counts. Bench players of this position
         are counted as "filled" to trigger the excess penalty.
         """
+        need_normalization = _compute_need_normalization(roster_slots)
         filled, total = self._count_position_slots(
             position, team_roster, roster_slots, player_positions
         )
-        return self._need_from_slot_counts(filled, total, position)
+        return self._need_from_slot_counts(filled, total, position, need_normalization)
 
-    def _need_from_slot_counts(self, filled: int, total: int, position: str) -> float:
+    def _need_from_slot_counts(
+        self, filled: int, total: int, position: str, need_normalization: float
+    ) -> float:
         """Compute need multiplier from pre-counted slot values.
 
         Separated from ``_calculate_need_multiplier`` so ``calculate_dynamic_vor``
         can reuse cached ``(filled, total)`` pairs without re-iterating the roster.
+
+        ``need_normalization`` is the maximum starting slots for any position in the
+        current league config.  Passing it here (rather than using the module-level
+        constant) ensures the boost scales correctly in non-standard formats — e.g. an
+        8-RB league normalises by 9, so positions with fewer slots still get a
+        proportionally smaller boost.
         """
         if total == 0:
             # No slots for this position at all — heavy penalty
@@ -314,10 +369,10 @@ class DynamicVORCalculator:
         empty = total - filled
 
         if empty > 0:
-            # Boost scales by absolute empty slots, normalized by max starting slots.
-            # QB (1 empty slot) gets smaller boost than RB/WR (3 empty slots),
-            # which naturally pushes QBs into later rounds vs elite RBs/WRs.
-            return 1.0 + (empty * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION)
+            # Boost scales by absolute empty slots, normalised by the max starting
+            # slots of any position in this league.  QB (1 slot) gets a smaller boost
+            # than RB/WR; in an 8-RB league RB dominates, which is the correct behaviour.
+            return 1.0 + (empty * ROSTER_NEED_WEIGHT / need_normalization)
 
         # All starting slots filled — penalize
         excess = abs(empty)  # How many beyond starting capacity

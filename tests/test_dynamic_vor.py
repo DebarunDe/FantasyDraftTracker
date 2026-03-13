@@ -2,12 +2,12 @@
 
 import pytest
 
-from src.data_pipeline.config import calculate_baseline_count
 from src.draft_manager.draft_controller import DraftController
 from src.draft_manager.draft_state import DraftState, LeagueConfig
 from src.simulation_engine.config import (
     NEED_NORMALIZATION,
     POSITION_SCARCITY_WEIGHTS,
+    QB_STREAMING_DISCOUNT,
     ROSTER_EXCESS_PENALTY,
     ROSTER_FILLED_PENALTY,
     ROSTER_NEED_WEIGHT,
@@ -151,59 +151,84 @@ class TestScarcityMultiplier:
         self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def test_no_players_drafted_returns_one(self):
-        result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=0)
+        result = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=0, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert result == 1.0
 
     def test_scarcity_increases_with_drafted_count(self):
-        low = self.calc._calculate_scarcity_multiplier("RB", drafted_count=5)
-        high = self.calc._calculate_scarcity_multiplier("RB", drafted_count=20)
+        low = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        high = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=20, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert high > low > 1.0
 
     def test_rb_higher_weight_than_qb_at_equal_pct(self):
-        """At the same drafted percentage, RB weight (1.8) > QB weight (1.3)."""
-        # 50% drafted at each position
-        rb_baseline = calculate_baseline_count("RB", 12)  # 40
-        qb_baseline = calculate_baseline_count("QB", 12)  # 18
-        rb_scarcity = self.calc._calculate_scarcity_multiplier("RB", drafted_count=rb_baseline // 2)
-        qb_scarcity = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline // 2)
+        """At the same drafted percentage, RB weight > QB weight."""
+        # total = (slots + FLEX) × league_size; 50% of each
+        rb_total = (DEFAULT_ROSTER_SLOTS["RB"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
+        qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
+        rb_scarcity = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=rb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        qb_scarcity = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert rb_scarcity > qb_scarcity
 
     def test_te_higher_weight_than_wr_at_equal_pct(self):
-        """At the same drafted percentage, TE weight (1.6) > WR weight (1.4)."""
-        # 50% drafted at each position (using league-size-dependent baselines)
-        wr_baseline = calculate_baseline_count("WR", 12)  # 41
-        te_baseline = calculate_baseline_count("TE", 12)  # 14
-        wr_scarcity = self.calc._calculate_scarcity_multiplier("WR", drafted_count=wr_baseline // 2)
-        te_scarcity = self.calc._calculate_scarcity_multiplier("TE", drafted_count=te_baseline // 2)
-        # TE has higher scarcity weight now (1.6 vs 1.4)
+        """At the same drafted percentage, TE weight (1.6) > WR weight (1.5)."""
+        # total = (slots + FLEX) × league_size; 50% of each
+        wr_total = (DEFAULT_ROSTER_SLOTS["WR"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
+        te_total = (DEFAULT_ROSTER_SLOTS["TE"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 24
+        wr_scarcity = self.calc._calculate_scarcity_multiplier(
+            "WR", drafted_count=wr_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        te_scarcity = self.calc._calculate_scarcity_multiplier(
+            "TE", drafted_count=te_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert te_scarcity > wr_scarcity
 
     def test_k_and_dst_have_equal_weight(self):
-        k_scarcity = self.calc._calculate_scarcity_multiplier("K", drafted_count=5)
-        dst_scarcity = self.calc._calculate_scarcity_multiplier("DST", drafted_count=5)
+        k_scarcity = self.calc._calculate_scarcity_multiplier(
+            "K", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        dst_scarcity = self.calc._calculate_scarcity_multiplier(
+            "DST", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert k_scarcity == dst_scarcity
 
     def test_drafted_pct_capped_at_one(self):
-        """Even if more players drafted than baseline, pct stays <= 1.0."""
-        qb_baseline = calculate_baseline_count("QB", 12)  # 18
-        # Draft more than baseline
-        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline + 5)
-        max_result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline)
+        """Even if more players drafted than total startable, pct stays <= 1.0."""
+        # QB total = 1 slot × 12 teams = 12
+        qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
+        result = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total + 5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        max_result = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert result == max_result
 
     def test_specific_values(self):
         """Verify formula: 1 + (drafted_pct * weight)."""
-        # RB: weight=1.8, baseline=40 (12-team)
-        # 20 drafted: pct = 20/40 = 0.5, scarcity = 1 + 0.5*1.8 = 1.9
-        rb_baseline = calculate_baseline_count("RB", 12)
-        result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=rb_baseline // 2)
+        # RB: weight=1.5, total=(2+1)*12=36
+        # 18 drafted: pct = 18/36 = 0.5, scarcity = 1 + 0.5*1.5 = 1.75
+        rb_total = (DEFAULT_ROSTER_SLOTS["RB"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
+        result = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=rb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         expected = 1.0 + 0.5 * POSITION_SCARCITY_WEIGHTS["RB"]
         assert result == pytest.approx(expected)
 
-        # QB: weight=1.3, baseline=18 (12-team)
-        # 9 drafted: pct = 9/18 = 0.5, scarcity = 1 + 0.5*1.3 = 1.65
-        qb_baseline = calculate_baseline_count("QB", 12)
-        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_baseline // 2)
+        # QB: weight=0.8, total=1*12=12
+        # 6 drafted: pct = 6/12 = 0.5, scarcity = 1 + 0.5*0.8 = 1.4
+        qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
+        result = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         expected_qb = 1.0 + 0.5 * POSITION_SCARCITY_WEIGHTS["QB"]
         assert result == pytest.approx(expected_qb)
 
@@ -213,31 +238,35 @@ class TestScarcityMultiplier:
         Skill positions: scarcity = 1 + (pct * weight) → increases
         K/DST: scarcity = 1 - (pct * weight) → decreases
         """
-        k_baseline = calculate_baseline_count("K", 12)  # 9
+        # K total = 1 slot × 12 teams = 12
+        k_total = DEFAULT_ROSTER_SLOTS["K"] * 12  # 12
         k_weight = POSITION_SCARCITY_WEIGHTS["K"]  # 0.3
 
         # No K drafted: scarcity = 1.0
-        scarcity_0 = self.calc._calculate_scarcity_multiplier("K", 0)
+        scarcity_0 = self.calc._calculate_scarcity_multiplier("K", 0, DEFAULT_ROSTER_SLOTS)
         assert scarcity_0 == pytest.approx(1.0)
 
         # Some K drafted: verify formula scarcity = 1 - (pct * weight)
         drafted_count = 4
-        drafted_pct = drafted_count / k_baseline  # 4/9 ≈ 0.444
-        scarcity_some = self.calc._calculate_scarcity_multiplier("K", drafted_count)
+        drafted_pct = drafted_count / k_total  # 4/12 ≈ 0.333
+        scarcity_some = self.calc._calculate_scarcity_multiplier(
+            "K", drafted_count, DEFAULT_ROSTER_SLOTS
+        )
         expected_some = 1.0 - (drafted_pct * k_weight)
         assert scarcity_some == pytest.approx(expected_some)
 
         # All K drafted: scarcity = 1 - 1.0*0.3 = 0.7
-        scarcity_full = self.calc._calculate_scarcity_multiplier("K", k_baseline)
+        scarcity_full = self.calc._calculate_scarcity_multiplier("K", k_total, DEFAULT_ROSTER_SLOTS)
         expected_full = 1.0 - k_weight
         assert scarcity_full == pytest.approx(expected_full)
 
         # Verify it decreases (inverse of skill positions)
         assert scarcity_0 > scarcity_some > scarcity_full
 
-        # Same for DST
-        dst_baseline = calculate_baseline_count("DST", 12)  # 9
-        dst_some = self.calc._calculate_scarcity_multiplier("DST", drafted_count)
+        # Same for DST (same slots and weight)
+        dst_some = self.calc._calculate_scarcity_multiplier(
+            "DST", drafted_count, DEFAULT_ROSTER_SLOTS
+        )
         assert dst_some == scarcity_some  # Same weight, same behavior
 
 
@@ -475,8 +504,9 @@ class TestCalculateDynamicVOR:
         expected_need = 1.0 + 1 * ROSTER_NEED_WEIGHT / NEED_NORMALIZATION
         assert r.need_multiplier == pytest.approx(expected_need)
         # Mid-round: uncertainty_adj = 1.0; single player → tier_urgency = 1.0 (no gap)
-        # dynamic_vor = base * scarcity * need * uncertainty_adj * tier_urgency
-        expected = 40.0 * 1.0 * expected_need * 1.0 * 1.0
+        # QB also gets QB_STREAMING_DISCOUNT applied (1-QB league streaming adjustment)
+        # dynamic_vor = base * scarcity * need * uncertainty_adj * tier_urgency * QB_STREAMING_DISCOUNT
+        expected = 40.0 * 1.0 * expected_need * 1.0 * 1.0 * QB_STREAMING_DISCOUNT
         assert r.dynamic_vor == pytest.approx(expected)
 
     def test_scarcity_boosts_positions_with_more_drafted(self):
@@ -644,25 +674,25 @@ class TestEdgeCases:
     def test_all_startable_drafted_caps_scarcity(self):
         """Scarcity doesn't go above the capped value."""
         player = _make_player("qb1", "QB", vor_half_ppr=30.0)
-        # QB baseline=18 (for 12-team), draft at/over baseline
-        qb_baseline = calculate_baseline_count("QB", 12)
+        # QB total startable = 1 slot × 12 teams = 12
+        qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
         result_at = self.calc.calculate_dynamic_vor(
             available_players=[player],
-            drafted_positions={"QB": qb_baseline},
+            drafted_positions={"QB": qb_total},
             roster_slots=DEFAULT_ROSTER_SLOTS,
             team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
             current_round=5,
         )
-        # Draft more than baseline
+        # Draft more than total
         result_over = self.calc.calculate_dynamic_vor(
             available_players=[player],
-            drafted_positions={"QB": qb_baseline + 10},
+            drafted_positions={"QB": qb_total + 10},
             roster_slots=DEFAULT_ROSTER_SLOTS,
             team_roster={pos: [] for pos in DEFAULT_ROSTER_SLOTS},
             current_round=5,
         )
         assert result_at["qb1"].scarcity_multiplier == result_over["qb1"].scarcity_multiplier
-        # QB weight=1.3, pct=1.0 → scarcity = 1 + 1.0*1.3 = 2.3
+        # QB weight=0.8, pct=1.0 → scarcity = 1 + 1.0*0.8 = 1.8
         expected_max_scarcity = 1.0 + 1.0 * POSITION_SCARCITY_WEIGHTS["QB"]
         assert result_at["qb1"].scarcity_multiplier == pytest.approx(expected_max_scarcity)
 
@@ -801,18 +831,18 @@ class TestFormulaVerification:
             current_round=3,
         )
 
-        # Henry: scarcity = 1 + (15/40)*1.8 = 1.675 (RB baseline is now 40, weight 1.8)
-        rb_baseline = calculate_baseline_count("RB", 12)
+        # Henry: total = (RB+FLEX)*12 = (2+1)*12 = 36; scarcity = 1 + (15/36)*1.5
+        rb_total = (DEFAULT_ROSTER_SLOTS["RB"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
         henry_r = result["henry"]
-        expected_scarcity = 1 + (15 / rb_baseline) * POSITION_SCARCITY_WEIGHTS["RB"]
+        expected_scarcity = 1 + (15 / rb_total) * POSITION_SCARCITY_WEIGHTS["RB"]
         assert henry_r.scarcity_multiplier == pytest.approx(expected_scarcity)
         # Henry: need = 1 + (2/3)*0.6 = 1.4 (1 of 3 slots filled, ROSTER_NEED_WEIGHT=0.6)
         assert henry_r.need_multiplier == pytest.approx(1 + (2 / 3) * ROSTER_NEED_WEIGHT)
 
-        # Wilson: scarcity = 1 + (10/41)*1.4 (WR baseline now 41, weight 1.4)
-        wr_baseline = calculate_baseline_count("WR", 12)
+        # Wilson: total = (WR+FLEX)*12 = (2+1)*12 = 36; scarcity = 1 + (10/36)*1.5
+        wr_total = (DEFAULT_ROSTER_SLOTS["WR"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
         wilson_r = result["wilson"]
-        expected_wr_scarcity = 1 + (10 / wr_baseline) * POSITION_SCARCITY_WEIGHTS["WR"]
+        expected_wr_scarcity = 1 + (10 / wr_total) * POSITION_SCARCITY_WEIGHTS["WR"]
         assert wilson_r.scarcity_multiplier == pytest.approx(expected_wr_scarcity)
         # Wilson: same need (1 of 3 slots filled)
         assert wilson_r.need_multiplier == pytest.approx(1 + (2 / 3) * ROSTER_NEED_WEIGHT)
@@ -875,6 +905,9 @@ class TestFormulaVerification:
                     * uncertainty_adj
                     * tier_urgency
                 )
+                # QB also gets streaming discount applied (1-QB league BEER+ adjustment)
+                if vor.position == "QB":
+                    expected *= QB_STREAMING_DISCOUNT
 
             assert vor.dynamic_vor == pytest.approx(expected, rel=1e-4)
 

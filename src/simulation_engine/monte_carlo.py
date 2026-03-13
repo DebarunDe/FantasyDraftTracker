@@ -41,8 +41,8 @@ import numpy as np
 from src.simulation_engine.config import (
     MC_COMPUTER_PICK_TOP_K,
     MC_NUM_SIMULATIONS,
-    POSITION_HARD_CAPS,
     SIMULATION_DEPTH_BY_ROUND,
+    compute_position_caps,
 )
 
 if TYPE_CHECKING:
@@ -154,6 +154,11 @@ class MonteCarloSimulator:
         # numpy's default_rng() uses OS entropy; no manual seed needed.
         rng = np.random.default_rng()
 
+        # Compute hard caps once from the actual roster slots so any league
+        # format (5-RB, 2-WR, 2-FLEX, etc.) is handled correctly.
+        roster_slots = draft_state.league_config.roster_slots
+        position_caps = compute_position_caps(roster_slots)
+
         expected_values: Dict[str, float] = {}
         for candidate in candidates:
             cid = candidate["player_id"]
@@ -168,7 +173,7 @@ class MonteCarloSimulator:
                     current_pick=draft_state.current_pick,
                     draft_order=draft_state.draft_order,
                     league_size=league_size,
-                    roster_slots=draft_state.league_config.roster_slots,
+                    roster_slots=roster_slots,
                     original_available=available_ids,
                     vor_sorted=vor_sorted,
                     adp_sorted=adp_sorted,
@@ -178,6 +183,7 @@ class MonteCarloSimulator:
                     existing_my_picks=existing_my_picks,
                     depth=depth,
                     rng=rng,
+                    position_caps=position_caps,
                 )
             expected_values[cid] = total / n
             logger.debug(
@@ -210,6 +216,7 @@ class MonteCarloSimulator:
         existing_my_picks: List[Tuple[str, str]],
         depth: int,
         rng: "np.random.Generator",
+        position_caps: Dict[str, int],
     ) -> float:
         """Run one Monte Carlo simulation.
 
@@ -256,10 +263,12 @@ class MonteCarloSimulator:
 
             if team_id == my_team_id:
                 chosen, my_vor_cursor = _pick_by_vor(
-                    available, vor_sorted, pos_counts, my_vor_cursor
+                    available, vor_sorted, pos_counts, position_caps, my_vor_cursor
                 )
             else:
-                chosen = _pick_by_adp(available, adp_sorted, pos_counts, rng)
+                chosen = _pick_by_adp(
+                    available, adp_sorted, pos_counts, rng, position_caps=position_caps
+                )
 
             if chosen is None:
                 break
@@ -361,6 +370,7 @@ def _pick_by_vor(
     available: set,
     vor_sorted: List[Tuple[str, str]],
     pos_counts: Dict[str, int],
+    position_caps: Dict[str, int],
     cursor: int = 0,
 ) -> Tuple[Optional[str], int]:
     """Return ``(player_id, new_cursor)`` for the highest-VOR available pick.
@@ -389,7 +399,7 @@ def _pick_by_vor(
         if pid not in available:
             i += 1
             continue
-        cap = POSITION_HARD_CAPS.get(pos, 999)
+        cap = position_caps.get(pos, 999)
         if pos_counts.get(pos, 0) >= cap:
             i += 1
             continue
@@ -403,6 +413,7 @@ def _pick_by_adp(
     pos_counts: Dict[str, int],
     rng: "np.random.Generator",
     top_k: int = MC_COMPUTER_PICK_TOP_K,
+    position_caps: Optional[Dict[str, int]] = None,
 ) -> Optional[str]:
     """Sample uniformly from the top-K ADP-ranked available players.
 
@@ -418,7 +429,7 @@ def _pick_by_adp(
     candidates: List[str] = []
     for pid, pos in adp_sorted:
         if pid in available:
-            cap = POSITION_HARD_CAPS.get(pos, 999)
+            cap = (position_caps or {}).get(pos, 999)
             if pos_counts.get(pos, 0) < cap:
                 candidates.append(pid)
                 if len(candidates) >= top_k:

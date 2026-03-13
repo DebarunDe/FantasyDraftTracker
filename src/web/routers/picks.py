@@ -6,8 +6,9 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from src.draft_manager.draft_rules import ValidationError
+from src.ui.config import reach_label as _reach_label
 from src.web.schemas import MakePickRequest, PickResponse
-from src.web.serializers import _reach_label, draft_state_to_response
+from src.web.serializers import draft_state_to_response
 from src.web.session_manager import SessionManager
 from src.web.websocket.connection_manager import manager
 from src.web.websocket.events import build_pick_made_event
