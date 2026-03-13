@@ -28,11 +28,11 @@ SCORING_FORMATS = {
 # - TE: TE14 replacement (1 starter + minimal FLEX share)
 # - K/DST: minimal depth; streaming-only positions
 VOR_PER_TEAM_WEIGHTS = {
-    "QB": 1.5,   # QB18: BEER+ streaming-adjusted replacement (above QB12 starter cutoff)
+    "QB": 1.5,  # QB18: BEER+ streaming-adjusted replacement (above QB12 starter cutoff)
     "RB": 2.33,  # RB28: flex-adjusted empirical replacement (was 3.3/RB40 — too deep)
-    "WR": 3.4,   # WR41: flex-dominant replacement (WRs fill ~75% of flex spots)
-    "TE": 1.2,   # TE14: just above starter cutoff
-    "K": 0.75,   # 1 starter, minimal bench (devalued per research)
+    "WR": 3.4,  # WR41: flex-dominant replacement (WRs fill ~75% of flex spots)
+    "TE": 1.2,  # TE14: just above starter cutoff
+    "K": 0.75,  # 1 starter, minimal bench (devalued per research)
     "DST": 0.75,  # 1 starter, minimal bench (devalued per research)
 }
 

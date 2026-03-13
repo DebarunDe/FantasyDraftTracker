@@ -109,7 +109,8 @@ class ComputerDrafter:
         # Fall back to all players only if every player is ineligible (edge case).
         _INELIGIBLE_VOR = {-100.0, -50.0}
         eligible = [
-            p for p in available_players
+            p
+            for p in available_players
             if vor_results.get(p["player_id"]) is None
             or vor_results[p["player_id"]].dynamic_vor not in _INELIGIBLE_VOR
         ]
