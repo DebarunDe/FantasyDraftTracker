@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from src.draft_manager.draft_state import DraftState, LeagueConfig
-from src.simulation_engine.config import CANDIDATE_POOL_SIZE, POSITION_HARD_CAPS
+from src.simulation_engine.config import CANDIDATE_POOL_SIZE, compute_position_caps
 from src.simulation_engine.models import Recommendation
 from src.simulation_engine.monte_carlo import (
     MonteCarloSimulator,
@@ -409,6 +409,7 @@ class TestHardCaps:
                 existing_my_picks=[],
                 depth=5,
                 rng=rng,
+                position_caps=compute_position_caps(STANDARD_ROSTER),
             )
             assert score >= 0.0
             assert score == score  # not NaN
@@ -418,9 +419,9 @@ class TestHardCaps:
         player_data = _make_player_pool(n_k=20, n_dst=20, n_rb=10, n_wr=10)
         state = _make_draft_state(player_data=player_data)
         sim = _make_simulator()
-        # Simulate with a K as candidate; K cap = 2
-        k_cap = POSITION_HARD_CAPS.get("K", 2)
-        assert k_cap == 2  # confirm config
+        # Simulate with a K as candidate; K cap derived from roster slots
+        k_cap = compute_position_caps(STANDARD_ROSTER).get("K")
+        assert k_cap == 2  # 1 K slot + 1 bench allowance
 
         vor_calc = DynamicVORCalculator("half_ppr", 12)
         vor_results = vor_calc.calculate_from_draft_state(state, 0)
@@ -450,6 +451,7 @@ class TestHardCaps:
             existing_my_picks=[],
             depth=5,
             rng=np.random.default_rng(0),
+            position_caps=compute_position_caps(STANDARD_ROSTER),
         )
         assert score >= 0.0
         assert score == score  # not NaN
@@ -662,6 +664,7 @@ class TestStochasticity:
                 existing_my_picks=[],
                 depth=3,
                 rng=rng,
+                position_caps=compute_position_caps(STANDARD_ROSTER),
             )
             for _ in range(20)
         ]
