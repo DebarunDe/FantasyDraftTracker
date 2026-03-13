@@ -8,9 +8,9 @@ import asyncio
 import logging
 
 from src.draft_manager.draft_rules import DraftRules, ValidationError
+from src.ui.config import reach_label as _reach_label
 from src.web.config import COMPUTER_PICK_DELAY_S
 from src.web.schemas import PickResponse
-from src.ui.config import reach_label as _reach_label
 from src.web.serializers import draft_state_to_response
 from src.web.session_manager import SessionManager
 from src.web.websocket.connection_manager import manager
