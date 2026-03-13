@@ -266,7 +266,9 @@ class MonteCarloSimulator:
                     available, vor_sorted, pos_counts, position_caps, my_vor_cursor
                 )
             else:
-                chosen = _pick_by_adp(available, adp_sorted, pos_counts, rng, position_caps=position_caps)
+                chosen = _pick_by_adp(
+                    available, adp_sorted, pos_counts, rng, position_caps=position_caps
+                )
 
             if chosen is None:
                 break

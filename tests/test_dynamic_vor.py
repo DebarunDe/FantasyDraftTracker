@@ -151,12 +151,18 @@ class TestScarcityMultiplier:
         self.calc = DynamicVORCalculator("half_ppr", league_size=12)
 
     def test_no_players_drafted_returns_one(self):
-        result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=0, roster_slots=DEFAULT_ROSTER_SLOTS)
+        result = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=0, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert result == 1.0
 
     def test_scarcity_increases_with_drafted_count(self):
-        low = self.calc._calculate_scarcity_multiplier("RB", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS)
-        high = self.calc._calculate_scarcity_multiplier("RB", drafted_count=20, roster_slots=DEFAULT_ROSTER_SLOTS)
+        low = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        high = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=20, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert high > low > 1.0
 
     def test_rb_higher_weight_than_qb_at_equal_pct(self):
@@ -164,8 +170,12 @@ class TestScarcityMultiplier:
         # total = (slots + FLEX) × league_size; 50% of each
         rb_total = (DEFAULT_ROSTER_SLOTS["RB"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
         qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
-        rb_scarcity = self.calc._calculate_scarcity_multiplier("RB", drafted_count=rb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS)
-        qb_scarcity = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS)
+        rb_scarcity = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=rb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        qb_scarcity = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert rb_scarcity > qb_scarcity
 
     def test_te_higher_weight_than_wr_at_equal_pct(self):
@@ -173,21 +183,33 @@ class TestScarcityMultiplier:
         # total = (slots + FLEX) × league_size; 50% of each
         wr_total = (DEFAULT_ROSTER_SLOTS["WR"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
         te_total = (DEFAULT_ROSTER_SLOTS["TE"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 24
-        wr_scarcity = self.calc._calculate_scarcity_multiplier("WR", drafted_count=wr_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS)
-        te_scarcity = self.calc._calculate_scarcity_multiplier("TE", drafted_count=te_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS)
+        wr_scarcity = self.calc._calculate_scarcity_multiplier(
+            "WR", drafted_count=wr_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        te_scarcity = self.calc._calculate_scarcity_multiplier(
+            "TE", drafted_count=te_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert te_scarcity > wr_scarcity
 
     def test_k_and_dst_have_equal_weight(self):
-        k_scarcity = self.calc._calculate_scarcity_multiplier("K", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS)
-        dst_scarcity = self.calc._calculate_scarcity_multiplier("DST", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS)
+        k_scarcity = self.calc._calculate_scarcity_multiplier(
+            "K", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        dst_scarcity = self.calc._calculate_scarcity_multiplier(
+            "DST", drafted_count=5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert k_scarcity == dst_scarcity
 
     def test_drafted_pct_capped_at_one(self):
         """Even if more players drafted than total startable, pct stays <= 1.0."""
         # QB total = 1 slot × 12 teams = 12
         qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
-        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_total + 5, roster_slots=DEFAULT_ROSTER_SLOTS)
-        max_result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_total, roster_slots=DEFAULT_ROSTER_SLOTS)
+        result = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total + 5, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
+        max_result = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         assert result == max_result
 
     def test_specific_values(self):
@@ -195,14 +217,18 @@ class TestScarcityMultiplier:
         # RB: weight=1.5, total=(2+1)*12=36
         # 18 drafted: pct = 18/36 = 0.5, scarcity = 1 + 0.5*1.5 = 1.75
         rb_total = (DEFAULT_ROSTER_SLOTS["RB"] + DEFAULT_ROSTER_SLOTS["FLEX"]) * 12  # 36
-        result = self.calc._calculate_scarcity_multiplier("RB", drafted_count=rb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS)
+        result = self.calc._calculate_scarcity_multiplier(
+            "RB", drafted_count=rb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         expected = 1.0 + 0.5 * POSITION_SCARCITY_WEIGHTS["RB"]
         assert result == pytest.approx(expected)
 
         # QB: weight=0.8, total=1*12=12
         # 6 drafted: pct = 6/12 = 0.5, scarcity = 1 + 0.5*0.8 = 1.4
         qb_total = DEFAULT_ROSTER_SLOTS["QB"] * 12  # 12
-        result = self.calc._calculate_scarcity_multiplier("QB", drafted_count=qb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS)
+        result = self.calc._calculate_scarcity_multiplier(
+            "QB", drafted_count=qb_total // 2, roster_slots=DEFAULT_ROSTER_SLOTS
+        )
         expected_qb = 1.0 + 0.5 * POSITION_SCARCITY_WEIGHTS["QB"]
         assert result == pytest.approx(expected_qb)
 
@@ -223,7 +249,9 @@ class TestScarcityMultiplier:
         # Some K drafted: verify formula scarcity = 1 - (pct * weight)
         drafted_count = 4
         drafted_pct = drafted_count / k_total  # 4/12 ≈ 0.333
-        scarcity_some = self.calc._calculate_scarcity_multiplier("K", drafted_count, DEFAULT_ROSTER_SLOTS)
+        scarcity_some = self.calc._calculate_scarcity_multiplier(
+            "K", drafted_count, DEFAULT_ROSTER_SLOTS
+        )
         expected_some = 1.0 - (drafted_pct * k_weight)
         assert scarcity_some == pytest.approx(expected_some)
 
@@ -236,7 +264,9 @@ class TestScarcityMultiplier:
         assert scarcity_0 > scarcity_some > scarcity_full
 
         # Same for DST (same slots and weight)
-        dst_some = self.calc._calculate_scarcity_multiplier("DST", drafted_count, DEFAULT_ROSTER_SLOTS)
+        dst_some = self.calc._calculate_scarcity_multiplier(
+            "DST", drafted_count, DEFAULT_ROSTER_SLOTS
+        )
         assert dst_some == scarcity_some  # Same weight, same behavior
 
 
