@@ -5,6 +5,7 @@ import { SetupWizard } from './components/setup/SetupWizard';
 import './styles/globals.css';
 import './styles/positions.css';
 import './styles/animations.css';
+import './styles/mobile.css';
 
 function HomeRoute() {
   const navigate = useNavigate();

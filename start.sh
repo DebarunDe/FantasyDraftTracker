@@ -4,18 +4,20 @@ set -euo pipefail
 # ── defaults ──────────────────────────────────────────────────────────────────
 PORT=8000
 FORCE_BUILD=false
+USE_TUNNEL=false
 
 # ── arg parsing ───────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -b|--build)   FORCE_BUILD=true; shift ;;
+        -t|--tunnel)  USE_TUNNEL=true; shift ;;
         -p|--port)
             if [[ -z "${2:-}" || ! "$2" =~ ^[0-9]+$ ]]; then
                 echo "ERROR: --port requires a numeric argument"
                 exit 1
             fi
             PORT="$2"; shift 2 ;;
-        *) echo "Unknown option: $1"; echo "Usage: $0 [--build] [--port <n>]"; exit 1 ;;
+        *) echo "Unknown option: $1"; echo "Usage: $0 [--build] [--tunnel] [--port <n>]"; exit 1 ;;
     esac
 done
 
@@ -34,6 +36,12 @@ if ! command -v npm &>/dev/null; then
     exit 1
 fi
 
+if [[ "$USE_TUNNEL" == true ]] && ! command -v cloudflared &>/dev/null; then
+    echo "ERROR: cloudflared not found. Install it with:"
+    echo "  brew install cloudflared"
+    exit 1
+fi
+
 # ── build frontend if needed ──────────────────────────────────────────────────
 if [[ "$FORCE_BUILD" == true || ! -d frontend/dist ]]; then
     echo "Building frontend..."
@@ -48,6 +56,26 @@ if [[ -z "$LOCAL_IP" ]]; then
     LOCAL_IP="$(ipconfig getifaddr en1 2>/dev/null || true)"
 fi
 
+# ── start cloudflare tunnel (if requested) ────────────────────────────────────
+TUNNEL_URL=""
+TUNNEL_PID=""
+TUNNEL_LOG=""
+if [[ "$USE_TUNNEL" == true ]]; then
+    echo "Starting Cloudflare tunnel..."
+    TUNNEL_LOG=$(mktemp)
+    cloudflared tunnel --url "http://localhost:${PORT}" >"$TUNNEL_LOG" 2>&1 &
+    TUNNEL_PID=$!
+    # Wait up to 10s for the public URL to appear
+    for i in $(seq 1 20); do
+        TUNNEL_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1 || true)
+        if [[ -n "$TUNNEL_URL" ]]; then break; fi
+        sleep 0.5
+    done
+    if [[ -z "$TUNNEL_URL" ]]; then
+        echo "WARNING: Could not detect tunnel URL. Check $TUNNEL_LOG for details."
+    fi
+fi
+
 # ── print banner ──────────────────────────────────────────────────────────────
 echo "┌─────────────────────────────────────────────────┐"
 echo "│         Fantasy Draft Tracker — Local Server     │"
@@ -59,17 +87,28 @@ else
 printf "│  Local:   http://%-29s│\n" "localhost:${PORT}"
 echo "│  iPhone:  (could not detect IP — check WiFi)    │"
 fi
+if [[ -n "$TUNNEL_URL" ]]; then
+echo "│  Public:  (see below)                            │"
+fi
 echo "│                                                 │"
 echo "│  Press Ctrl+C to stop                          │"
 echo "└─────────────────────────────────────────────────┘"
+if [[ -n "$TUNNEL_URL" ]]; then
+echo ""
+echo "  Public URL: $TUNNEL_URL"
+fi
 echo ""
 
 # ── clean shutdown handler ────────────────────────────────────────────────────
 _shutdown() {
     echo ""
     echo "Server stopped."
+    if [[ -n "$TUNNEL_PID" ]]; then
+        kill "$TUNNEL_PID" 2>/dev/null || true
+        [[ -n "$TUNNEL_LOG" ]] && rm -f "$TUNNEL_LOG"
+    fi
 }
-trap _shutdown INT TERM
+trap _shutdown EXIT INT TERM
 
 # ── start server ──────────────────────────────────────────────────────────────
 venv/bin/python -m uvicorn src.web.app:app --host 0.0.0.0 --port "$PORT"

@@ -66,13 +66,13 @@ export function PostDraftScreen({ draft }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-primary)' }}>
       {/* Top bar */}
-      <div style={{
+      <div className="post-draft-topbar" style={{
         display: 'flex', alignItems: 'center', gap: 0,
         borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)',
         padding: '0 12px', flexShrink: 0,
       }}>
         {/* Draft complete badge */}
-        <span style={{
+        <span className="post-draft-badge" style={{
           fontSize: 11, fontWeight: 700, color: 'var(--success)',
           marginRight: 16, padding: '4px 8px',
           background: 'rgba(34,197,94,0.1)', borderRadius: 4,
@@ -83,44 +83,48 @@ export function PostDraftScreen({ draft }: Props) {
         </span>
 
         {/* Tabs */}
-        {tabs.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            style={{
-              padding: '12px 14px',
-              fontSize: 13,
-              fontWeight: tab === key ? 700 : 400,
-              background: 'transparent',
-              border: 'none',
-              borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent',
-              color: tab === key ? 'var(--accent)' : 'var(--text-secondary)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        <div className="post-draft-tabs" style={{ display: 'flex' }}>
+          {tabs.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                padding: '12px 14px',
+                fontSize: 13,
+                fontWeight: tab === key ? 700 : 400,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent',
+                color: tab === key ? 'var(--accent)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
         {/* Actions */}
-        <button
-          className="secondary"
-          onClick={() => exportDraft(draft.draft_id)}
-          style={{ fontSize: 12, padding: '4px 12px', marginRight: 8 }}
-        >
-          Export CSV
-        </button>
-        <button
-          className="secondary"
-          onClick={() => navigate('/')}
-          style={{ fontSize: 12, padding: '4px 12px' }}
-        >
-          ← Home
-        </button>
+        <div className="post-draft-actions" style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="secondary post-action-btn"
+            onClick={() => exportDraft(draft.draft_id)}
+            style={{ fontSize: 12, padding: '4px 12px' }}
+          >
+            Export CSV
+          </button>
+          <button
+            className="secondary post-action-btn"
+            onClick={() => navigate('/')}
+            style={{ fontSize: 12, padding: '4px 12px' }}
+          >
+            ← Home
+          </button>
+        </div>
       </div>
 
       {/* Tab content */}
@@ -173,9 +177,9 @@ function RostersTab({
   const teamData = allRosters.find((r) => r.team_id === selectedId);
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="post-sidebar-layout" style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       {/* Team list sidebar */}
-      <div style={{
+      <div className="post-team-sidebar" style={{
         width: 180, borderRight: '1px solid var(--border)',
         overflowY: 'auto', padding: '8px 0', flexShrink: 0,
       }}>
@@ -185,6 +189,8 @@ function RostersTab({
           return (
             <div
               key={r.team_id}
+              className="post-team-sidebar-item"
+              data-selected={isSelected ? 'true' : 'false'}
               onClick={() => setSelectedId(r.team_id)}
               style={{
                 padding: '7px 12px', cursor: 'pointer',
@@ -475,9 +481,9 @@ function PickQualityTab({ draft, humanTeamId }: { draft: DraftSummary; humanTeam
   const selectedPicks = selectedStats?.teamPicks ?? [];
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="post-sidebar-layout" style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       {/* Team list sidebar */}
-      <div style={{
+      <div className="post-team-sidebar" style={{
         width: 200, borderRight: '1px solid var(--border)',
         overflowY: 'auto', padding: '8px 0', flexShrink: 0,
       }}>
@@ -486,6 +492,8 @@ function PickQualityTab({ draft, humanTeamId }: { draft: DraftSummary; humanTeam
           return (
             <div
               key={team.team_id}
+              className="post-team-sidebar-item"
+              data-selected={isSelected ? 'true' : 'false'}
               onClick={() => setSelectedId(team.team_id)}
               style={{
                 padding: '7px 12px', cursor: 'pointer',
@@ -531,6 +539,7 @@ function PickQualityTab({ draft, humanTeamId }: { draft: DraftSummary; humanTeam
             <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               All Picks
             </div>
+            <div className="picks-table-scroll">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -548,6 +557,7 @@ function PickQualityTab({ draft, humanTeamId }: { draft: DraftSummary; humanTeam
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
