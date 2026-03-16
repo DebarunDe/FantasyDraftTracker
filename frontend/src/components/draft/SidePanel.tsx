@@ -22,7 +22,7 @@ export function SidePanel({ draft, players, recommendations, onPickPlayer, onFil
   const displayedTab = activeTabOverride ?? tab;
 
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && activeTabOverride !== undefined && !onTabChange) {
+    if (import.meta.env.DEV && activeTabOverride !== undefined && !onTabChange) {
       console.warn('SidePanel: activeTabOverride is set without onTabChange. Tab clicks will have no effect.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
