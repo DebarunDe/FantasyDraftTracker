@@ -26,18 +26,20 @@ export function RecommendationsPanel({ draft, recommendations, onPickPlayer, ref
   }
 
   return (
-    <div>
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <span style={{ fontWeight: 600, fontSize: 13 }}>🤖 Co-Pilot Picks</span>
         {refreshing && <LoadingSpinner />}
       </div>
-      {recommendations.length === 0 && !refreshing ? (
-        <p style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>Loading recommendations…</p>
-      ) : (
-        recommendations.map((rec) => (
-          <RecCard key={rec.player_id} rec={rec} onPick={onPickPlayer} />
-        ))
-      )}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {recommendations.length === 0 && !refreshing ? (
+          <p style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>Loading recommendations…</p>
+        ) : (
+          recommendations.map((rec) => (
+            <RecCard key={rec.player_id} rec={rec} onPick={onPickPlayer} />
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,278 @@
+/* ============================================================
+   Mobile responsiveness — applies at max-width: 768px only.
+   Desktop styles are entirely unaffected by this file.
+   ============================================================ */
+
+/* Bottom nav: hidden on desktop, shown on mobile */
+.mobile-bottom-nav {
+  display: none;
+}
+
+/* Mobile draft board: hidden on desktop, shown on mobile */
+.mobile-draft-board {
+  display: none;
+}
+
+/* Desktop draft grid: visible on desktop, hidden on mobile */
+.desktop-draft-grid {
+  display: flex;
+  flex: 1;
+}
+
+/* Mobile board view toggle: hidden on desktop */
+.mobile-board-toggle {
+  display: none;
+}
+
+/* ============================================================
+   Mobile overrides
+   ============================================================ */
+@media (max-width: 768px) {
+
+  /* ── DraftBoard layout ── */
+
+  /* Mobile board view toggle bar */
+  .mobile-board-toggle {
+    display: flex;
+    gap: 6px;
+    padding: 6px 2px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+
+  .mobile-board-toggle button {
+    flex: 1;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .mobile-board-toggle button.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  /* Switch board view by data-mobile-show attribute */
+  .desktop-draft-grid {
+    display: none !important;
+  }
+
+  .desktop-draft-grid[data-mobile-show="true"] {
+    display: flex !important;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .mobile-draft-board {
+    display: none !important;
+  }
+
+  .mobile-draft-board[data-mobile-show="true"] {
+    display: flex !important;
+    flex-direction: column;
+    /* No flex:1 — natural content height so draft-grid-pane (overflow:auto) can scroll */
+  }
+
+  /* Main content area: stack grid above side panel on mobile */
+  .draft-main-content {
+    flex-direction: column !important;
+  }
+
+  /* Board pane fills all remaining height and scrolls on mobile (board-only tab) */
+  .draft-grid-pane {
+    flex: 1 !important;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Split mode (recs tab): board pane fixed height on top so iOS can scroll it */
+  .draft-main-content[data-mobile-split="true"] .draft-grid-pane {
+    height: 30vh !important;
+    flex: none !important;
+    padding: 0 !important;
+  }
+
+  /* Side panel fills full width and all remaining height on mobile */
+  .draft-side-pane {
+    flex: 1 !important;
+    min-height: 0;
+    width: 100% !important;
+    border-left: none !important;
+    border-top: none !important;
+  }
+
+  /* Split mode: thin divider between board and recs */
+  .draft-main-content[data-mobile-split="true"] .draft-side-pane {
+    border-top: 2px solid var(--border) !important;
+  }
+
+  /* Hide inactive pane (board vs panel) via data-hidden attribute */
+  .draft-grid-pane[data-hidden="true"],
+  .draft-side-pane[data-hidden="true"] {
+    display: none !important;
+  }
+
+  /* Footer action buttons — larger tap targets */
+  .draft-footer-btn {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+    min-height: 44px;
+  }
+
+  /* ── Bottom navigation bar ── */
+  /* NOT position:fixed — sits in normal flex flow to avoid iOS overflow:hidden clipping */
+  .mobile-bottom-nav {
+    display: flex;
+    flex-shrink: 0;
+    height: 52px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    border-top: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 4px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+
+  .mobile-nav-btn.active {
+    color: var(--accent);
+    border-top-color: var(--accent);
+  }
+
+  /* ── DraftGrid horizontal scroll ── */
+  .draft-grid-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .draft-grid-table {
+    width: auto !important;
+    table-layout: auto !important;
+  }
+
+  .draft-grid-table th,
+  .draft-grid-table td {
+    min-width: 70px;
+  }
+
+  /* ── SidePanel: hide internal tab bar (bottom nav replaces it) ── */
+  .sidepanel-tab-bar {
+    display: none !important;
+  }
+
+  /* ── PickInput: stays in normal flow inside the side panel ── */
+  /* dropdown opens upward via position:absolute bottom:100% (the default) */
+  .pick-input-dropdown {
+    max-height: 50vh;
+  }
+
+  /* ── PostDraftScreen top bar ── */
+  .post-draft-topbar {
+    flex-wrap: wrap !important;
+    padding: 0 8px !important;
+    gap: 0 !important;
+  }
+
+  /* "DRAFT COMPLETE" badge goes full width on its own row */
+  .post-draft-badge {
+    width: 100%;
+    text-align: center;
+    padding: 6px !important;
+    margin-right: 0 !important;
+  }
+
+  /* Tabs scroll horizontally when they don't fit */
+  .post-draft-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+    display: flex;
+  }
+
+  .post-draft-tabs button {
+    padding: 10px 12px !important;
+    white-space: nowrap;
+    font-size: 12px !important;
+  }
+
+  /* Action buttons pushed to their own row */
+  .post-draft-actions {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    padding: 6px 0;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Larger tap targets for post-draft action buttons */
+  .post-action-btn {
+    min-height: 44px !important;
+    padding: 10px 16px !important;
+  }
+
+  /* ── PostDraftScreen sidebar → horizontal chip row ── */
+  .post-sidebar-layout {
+    flex-direction: column !important;
+  }
+
+  .post-team-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 56px;
+    padding: 4px !important;
+    flex-shrink: 0;
+  }
+
+  .post-team-sidebar-item {
+    flex-shrink: 0;
+    padding: 6px 12px !important;
+    border-left: none !important;
+    border-bottom: 3px solid transparent !important;
+    border-right: none;
+    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    cursor: pointer;
+  }
+
+  .post-team-sidebar-item[data-selected="true"] {
+    border-bottom-color: var(--accent) !important;
+    background: var(--bg-secondary) !important;
+    border-left: none !important;
+  }
+
+  /* ── Pick Quality table horizontal scroll ── */
+  .picks-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .picks-table-scroll table {
+    min-width: 480px;
+  }
+}

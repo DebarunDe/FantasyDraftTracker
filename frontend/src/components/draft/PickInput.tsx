@@ -30,7 +30,7 @@ export function PickInput({ draft, players, onPickPlayer }: Props) {
   };
 
   return (
-    <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', flexShrink: 0 }}>
+    <div className="pick-input-bar" style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', flexShrink: 0 }}>
       <div style={{ marginBottom: 4, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
         {isManual ? `Enter pick for ${currentTeam?.team_name}` : `Your pick — ${currentTeam?.team_name}`}
       </div>
@@ -54,6 +54,7 @@ export function PickInput({ draft, players, onPickPlayer }: Props) {
           />
           {results.length > 0 && (
             <div
+              className="pick-input-dropdown"
               style={{
                 position: 'absolute', bottom: '100%', left: 0, right: 0,
                 background: 'var(--bg-card)', border: '1px solid var(--border)',

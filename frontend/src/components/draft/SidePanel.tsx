@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DraftSummary, PlayerResponse, RecommendationResponse } from '../../types/draft';
 import { AvailablePlayers } from './AvailablePlayers';
 import { RecommendationsPanel } from './RecommendationsPanel';
@@ -13,10 +13,28 @@ interface Props {
   onPickPlayer: (playerId: string) => void;
   onFilterChange: (position: string | undefined) => void;
   recsLoading: boolean;
+  activeTabOverride?: Tab;
+  onTabChange?: (tab: Tab) => void;
 }
 
-export function SidePanel({ draft, players, recommendations, onPickPlayer, onFilterChange, recsLoading }: Props) {
+export function SidePanel({ draft, players, recommendations, onPickPlayer, onFilterChange, recsLoading, activeTabOverride, onTabChange }: Props) {
   const [tab, setTab] = useState<Tab>('recs');
+  const displayedTab = activeTabOverride ?? tab;
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && activeTabOverride !== undefined && !onTabChange) {
+      console.warn('SidePanel: activeTabOverride is set without onTabChange. Tab clicks will have no effect.');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleTabClick = (id: Tab) => {
+    if (activeTabOverride !== undefined && onTabChange) {
+      onTabChange(id);
+    } else {
+      setTab(id);
+    }
+  };
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'recs', label: '🤖 Recs' },
@@ -26,18 +44,18 @@ export function SidePanel({ draft, players, recommendations, onPickPlayer, onFil
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid var(--border)' }}>
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      {/* Tab bar — hidden on mobile (bottom nav replaces it) */}
+      <div className="sidepanel-tab-bar" style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {tabs.map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => handleTabClick(t.id)}
             style={{
               flex: 1, padding: '10px 4px', borderRadius: 0,
-              background: tab === t.id ? 'var(--bg-hover)' : 'transparent',
-              color: tab === t.id ? 'var(--text-primary)' : 'var(--text-muted)',
-              fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
-              borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
+              background: displayedTab === t.id ? 'var(--bg-hover)' : 'transparent',
+              color: displayedTab === t.id ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontSize: 13, fontWeight: displayedTab === t.id ? 700 : 500,
+              borderBottom: displayedTab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
             }}
           >
             {t.label}
@@ -47,7 +65,7 @@ export function SidePanel({ draft, players, recommendations, onPickPlayer, onFil
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {tab === 'recs' && (
+        {displayedTab === 'recs' && (
           <RecommendationsPanel
             draft={draft}
             recommendations={recommendations}
@@ -55,7 +73,7 @@ export function SidePanel({ draft, players, recommendations, onPickPlayer, onFil
             refreshing={recsLoading}
           />
         )}
-        {tab === 'available' && (
+        {displayedTab === 'available' && (
           <AvailablePlayers
             players={players}
             onPickPlayer={onPickPlayer}
@@ -63,7 +81,7 @@ export function SidePanel({ draft, players, recommendations, onPickPlayer, onFil
             rosterSlots={draft.league_config.roster_slots}
           />
         )}
-        {tab === 'roster' && <RosterPanel draft={draft} />}
+        {displayedTab === 'roster' && <RosterPanel draft={draft} />}
       </div>
     </div>
   );

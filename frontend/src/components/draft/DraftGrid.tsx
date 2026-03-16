@@ -29,8 +29,8 @@ export function DraftGrid({ draft, newlyAddedPickNumber }: Props) {
   );
 
   return (
-    <div style={{ overflowY: 'auto', flex: 1 }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+    <div className="draft-grid-scroll" style={{ overflowY: 'auto', overflowX: 'auto', flex: 1 }}>
+      <table className="draft-grid-table" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
         <thead>
           <tr>
             <th style={{ width: 36, padding: '6px 4px', color: 'var(--text-muted)', fontSize: 11, textAlign: 'center' }}>
