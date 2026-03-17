@@ -19,6 +19,7 @@ export interface CreateDraftRequest {
   human_team_id: number;
   data_year: number;
   pick_trades: PickTradeInput[];
+  pick_clock_seconds: number | null;
 }
 
 export interface LeagueConfig {
@@ -29,6 +30,7 @@ export interface LeagueConfig {
   draft_mode: DraftMode;
   data_year: number;
   roster_slots: Record<string, number>;
+  pick_clock_seconds: number | null;
 }
 
 export interface PickResponse {

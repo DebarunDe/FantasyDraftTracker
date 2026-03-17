@@ -28,6 +28,7 @@ export function StepConfirm({ config, onSubmit, loading }: Props) {
               ['Total Rounds', totalRounds],
               ['Your Team', config.team_names[config.human_team_id]],
               ['Pick Trades', config.pick_trades.length === 0 ? 'None' : `${config.pick_trades.length} trade(s)`],
+              ['Pick Timer', config.pick_clock_seconds == null ? 'No timer' : `${config.pick_clock_seconds}s`],
             ].map(([label, val]) => (
               <tr key={String(label)} style={{ borderBottom: '1px solid var(--border)' }}>
                 <td style={{ padding: '8px 0', color: 'var(--text-muted)', width: '40%' }}>{label}</td>

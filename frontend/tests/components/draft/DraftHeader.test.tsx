@@ -69,6 +69,7 @@ describe('DraftHeader', () => {
         draft_mode: 'manual_tracker',
         data_year: 2025,
         roster_slots: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, DST: 1, K: 1, BENCH: 6 },
+        pick_clock_seconds: null,
       },
     });
     render(<DraftHeader draft={draft} wsStatus="open" />);

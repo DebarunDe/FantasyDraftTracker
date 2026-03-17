@@ -34,6 +34,7 @@ export function SetupWizard() {
   const [leagueSize, setLeagueSize] = useState(12);
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>('half_ppr');
   const [rosterSlots, setRosterSlots] = useState<Record<string, number>>(DEFAULT_ROSTER_SLOTS);
+  const [pickClockSeconds, setPickClockSeconds] = useState<number | null>(null);
   const [teamNames, setTeamNames] = useState<string[]>(
     Array.from({ length: 12 }, (_, i) => `Team ${i + 1}`),
   );
@@ -48,11 +49,12 @@ export function SetupWizard() {
   const totalRounds = Object.values(rosterSlots).reduce((a, b) => a + b, 0);
 
   // Sync team names when league size changes
-  const handleLeagueConfigChange = (cfg: { leagueSize: number; scoringFormat: ScoringFormat; rosterSlots: Record<string, number> }) => {
+  const handleLeagueConfigChange = (cfg: { leagueSize: number; scoringFormat: ScoringFormat; rosterSlots: Record<string, number>; pickClockSeconds: number | null }) => {
     const newSize = cfg.leagueSize;
     setLeagueSize(newSize);
     setScoringFormat(cfg.scoringFormat);
     setRosterSlots(cfg.rosterSlots);
+    setPickClockSeconds(cfg.pickClockSeconds);
     const newRounds = Object.values(cfg.rosterSlots).reduce((a, b) => a + b, 0);
     setDraftOrder(generateSnakeOrder(newSize, newRounds));
     setTeamNames((prev) =>
@@ -79,6 +81,7 @@ export function SetupWizard() {
         human_team_id: humanTeamId,
         data_year: 2025,
         pick_trades: pickTrades,
+        pick_clock_seconds: draftMode === 'manual_tracker' ? null : pickClockSeconds,
       };
       const draft = await createDraft(req);
       navigate(`/draft/${draft.draft_id}`);
@@ -136,8 +139,9 @@ export function SetupWizard() {
         {step === 1 && <StepDraftMode value={draftMode} onChange={setDraftMode} />}
         {step === 2 && (
           <StepLeagueConfig
-            value={{ leagueSize, scoringFormat, rosterSlots }}
+            value={{ leagueSize, scoringFormat, rosterSlots, pickClockSeconds }}
             onChange={handleLeagueConfigChange}
+            draftMode={draftMode}
           />
         )}
         {step === 3 && (
@@ -171,6 +175,7 @@ export function SetupWizard() {
               human_team_id: humanTeamId,
               data_year: 2025,
               pick_trades: pickTrades,
+              pick_clock_seconds: draftMode === 'manual_tracker' ? null : pickClockSeconds,
             }}
             onSubmit={handleSubmit}
             loading={loading}

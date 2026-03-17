@@ -99,6 +99,7 @@ export function makeDraftSummary(overrides: Partial<DraftSummary> = {}): DraftSu
       draft_mode: 'simulation',
       data_year: 2025,
       roster_slots: DEFAULT_ROSTER_SLOTS,
+      pick_clock_seconds: null,
     },
     draft_start_time: '2025-01-01T00:00:00Z',
     current_pick: 1,

@@ -63,6 +63,7 @@ def draft_state_to_response(state: DraftState) -> DraftSummaryResponse:
             draft_mode=lc.draft_mode,
             data_year=lc.data_year,
             roster_slots=lc.roster_slots,
+            pick_clock_seconds=lc.pick_clock_seconds,
         ),
         draft_start_time=state.draft_start_time,
         current_pick=state.current_pick,

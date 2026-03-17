@@ -28,6 +28,7 @@ export function DraftBoard() {
     wsStatus,
     error,
     clearError,
+    reportError,
     pickPlayer,
     refreshPlayers,
   } = useDraft(draftId ?? null);
@@ -81,7 +82,18 @@ export function DraftBoard() {
       <ComputerPickOverlay event={computerThinking} />
 
       {/* Header */}
-      <DraftHeader draft={draft} wsStatus={wsStatus} />
+      <DraftHeader
+        draft={draft}
+        wsStatus={wsStatus}
+        onClockExpire={() => {
+          const top = recommendations[0];
+          if (top) {
+            handlePickPlayer(top.player_id);
+          } else {
+            reportError('Time expired — no recommendations available. Please make a pick manually.');
+          }
+        }}
+      />
 
       {/* Main content: grid + sidebar */}
       <div
@@ -136,9 +148,10 @@ export function DraftBoard() {
               onFilterChange={refreshPlayers}
               recsLoading={recsLoading}
               activeTabOverride={mobilePanelTab === 'board' ? undefined : mobilePanelTab}
+              onTabChange={(tab) => setMobilePanelTab(tab)}
             />
           </div>
-          <PickInput draft={draft} players={players} onPickPlayer={handlePickPlayer} />
+          <PickInput draft={draft} onPickPlayer={handlePickPlayer} />
         </div>
       </div>
 

@@ -2,16 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 
 /**
  * Countdown timer for human pick turns. Visual only — not enforced server-side.
- * Resets to `seconds` whenever `active` transitions false → true.
+ * Resets to `totalSeconds` whenever `active` transitions false → true.
+ * Calls `onExpire` once when the timer reaches 0.
  */
-export function usePickClock(totalSeconds: number, active: boolean): number {
+export function usePickClock(
+  totalSeconds: number,
+  active: boolean,
+  onExpire?: () => void,
+): number {
   const [remaining, setRemaining] = useState(totalSeconds);
   const prevActive = useRef(false);
+  const expiredRef = useRef(false);
 
   useEffect(() => {
-    // Reset when newly activated
     if (active && !prevActive.current) {
       setRemaining(totalSeconds);
+      expiredRef.current = false;
     }
     prevActive.current = active;
 
@@ -23,6 +29,13 @@ export function usePickClock(totalSeconds: number, active: boolean): number {
 
     return () => clearInterval(interval);
   }, [active, totalSeconds]);
+
+  useEffect(() => {
+    if (remaining === 0 && active && !expiredRef.current) {
+      expiredRef.current = true;
+      onExpire?.();
+    }
+  }, [remaining, active, onExpire]);
 
   return remaining;
 }

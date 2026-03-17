@@ -22,10 +22,11 @@ export const getPlayers = (
   position?: string,
   limit = 50,
   offset = 0,
+  name?: string,
 ): Promise<PlayerResponse[]> =>
   client
     .get<PlayerResponse[]>(`/drafts/${draftId}/players`, {
-      params: { position, limit, offset },
+      params: { position, limit, offset, name },
     })
     .then((r) => r.data);
 

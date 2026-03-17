@@ -38,6 +38,7 @@ async def create_draft(body: CreateDraftRequest) -> DraftSummaryResponse:
             draft_mode=body.draft_mode,
             data_year=body.data_year,
             pick_trades=[t.model_dump() for t in body.pick_trades],
+            pick_clock_seconds=body.pick_clock_seconds,
         )
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

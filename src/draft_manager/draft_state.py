@@ -79,6 +79,7 @@ class LeagueConfig:
     draft_mode: str = "simulation"  # "simulation" or "manual_tracker"
     data_year: int = 2025
     roster_slots: Dict[str, int] = field(default_factory=dict)
+    pick_clock_seconds: Optional[int] = None  # None = no timer
 
     def total_rounds(self) -> int:
         """Calculate total number of draft rounds."""

@@ -19,6 +19,7 @@ interface UseDraftResult {
   wsStatus: string;
   error: string | null;
   clearError: () => void;
+  reportError: (msg: string) => void;
   pickPlayer: (playerId: string) => Promise<void>;
   refreshPlayers: (position?: string) => void;
   refreshRecommendations: () => void;
@@ -153,6 +154,7 @@ export function useDraft(draftId: string | null): UseDraftResult {
     wsStatus,
     error,
     clearError: () => setError(null),
+    reportError: (msg: string) => setError(msg),
     pickPlayer,
     refreshPlayers,
     refreshRecommendations,
