@@ -30,7 +30,9 @@ async def get_players(
     position: Optional[str] = Query(None, description="Filter by position (QB/RB/WR/TE/K/DST)"),
     limit: int = Query(AVAILABLE_PLAYERS_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    name: Optional[str] = Query(None, description="Case-insensitive substring filter on player name"),
+    name: Optional[str] = Query(
+        None, description="Case-insensitive substring filter on player name"
+    ),
 ) -> List[PlayerResponse]:
     """Return available players, optionally filtered by position, sorted by VOR.
 
