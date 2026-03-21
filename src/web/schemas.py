@@ -24,6 +24,7 @@ class CreateDraftRequest(BaseModel):
     human_team_id: int = 0
     data_year: int = 2025
     pick_trades: List[PickTradeInput] = []
+    pick_clock_seconds: Optional[int] = None
 
     @field_validator("league_size")
     @classmethod
@@ -51,6 +52,7 @@ class LeagueConfigResponse(BaseModel):
     draft_mode: str
     data_year: int
     roster_slots: Dict[str, int]
+    pick_clock_seconds: Optional[int] = None
 
 
 class PickResponse(BaseModel):

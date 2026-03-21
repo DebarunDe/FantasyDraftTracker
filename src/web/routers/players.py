@@ -30,6 +30,9 @@ async def get_players(
     position: Optional[str] = Query(None, description="Filter by position (QB/RB/WR/TE/K/DST)"),
     limit: int = Query(AVAILABLE_PLAYERS_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    name: Optional[str] = Query(
+        None, description="Case-insensitive substring filter on player name"
+    ),
 ) -> List[PlayerResponse]:
     """Return available players, optionally filtered by position, sorted by VOR.
 
@@ -60,6 +63,11 @@ async def get_players(
 
     # Strip players whose positions are excluded from this league
     players = [p for p in players if p.get("position") in valid_positions]
+
+    # Filter by name substring if provided
+    if name:
+        name_lower = name.lower()
+        players = [p for p in players if name_lower in p.get("name", "").lower()]
 
     # Sort by baseline VOR for the current scoring format, descending
     players.sort(

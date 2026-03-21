@@ -34,6 +34,7 @@ class DraftInitializer:
         draft_mode: str = "simulation",
         data_year: int = 2025,
         pick_trades: Optional[List[Dict]] = None,
+        pick_clock_seconds: Optional[int] = None,
     ) -> DraftState:
         """
         Create a new draft instance.
@@ -64,6 +65,7 @@ class DraftInitializer:
             draft_mode=draft_mode,
             data_year=data_year,
             roster_slots=roster_slots,
+            pick_clock_seconds=pick_clock_seconds,
         )
 
         draft_state = DraftState.create_new(

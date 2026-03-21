@@ -9,15 +9,23 @@ const SCORING_LABELS: Record<string, string> = {
 interface Props {
   draft: DraftSummary;
   wsStatus: string;
+  onClockExpire?: () => void;
 }
 
-export function DraftHeader({ draft, wsStatus }: Props) {
+export function DraftHeader({ draft, wsStatus, onClockExpire }: Props) {
   const { current_round, current_pick, current_team_id, is_complete, league_config, teams } = draft;
   const currentTeam = teams[current_team_id];
   const isHumanTurn = currentTeam?.is_human ?? false;
   const totalRounds = Object.values(league_config.roster_slots).reduce((a, b) => a + b, 0);
 
-  const clockSeconds = usePickClock(90, isHumanTurn && !is_complete);
+  const clockTotal = league_config.pick_clock_seconds;
+  const clockActive = !!clockTotal && isHumanTurn && !is_complete;
+
+  const clockSeconds = usePickClock(
+    clockTotal ?? 90,
+    clockActive,
+    clockActive ? onClockExpire : undefined,
+  );
 
   return (
     <div
@@ -62,7 +70,7 @@ export function DraftHeader({ draft, wsStatus }: Props) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <PickClock seconds={clockSeconds} total={90} active={isHumanTurn && !is_complete} />
+        <PickClock seconds={clockSeconds} total={clockTotal ?? 90} active={clockActive} />
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {league_config.league_size}-team · {SCORING_LABELS[league_config.scoring_format] ?? league_config.scoring_format}
           {league_config.draft_mode === 'manual_tracker' && (

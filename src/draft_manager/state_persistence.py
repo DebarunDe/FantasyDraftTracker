@@ -171,6 +171,7 @@ class StatePersistence:
                 "draft_mode": state.league_config.draft_mode,
                 "data_year": state.league_config.data_year,
                 "roster_slots": state.league_config.roster_slots,
+                "pick_clock_seconds": state.league_config.pick_clock_seconds,
             },
             "draft_start_time": state.draft_start_time,
             "current_pick": state.current_pick,
@@ -216,6 +217,7 @@ class StatePersistence:
             draft_mode=lc.get("draft_mode", "simulation"),
             data_year=lc.get("data_year", 2025),
             roster_slots=lc["roster_slots"],
+            pick_clock_seconds=lc.get("pick_clock_seconds"),
         )
 
         teams = [
