@@ -8,7 +8,10 @@ from typing import Dict, List, Optional
 from src.draft_manager.config import (
     DEFAULT_ROSTER_SLOTS,
     DEFAULT_SCORING_FORMAT,
+    PLAYER_DB_API_KEY,
+    PLAYER_DB_URL,
     PROCESSED_DATA_DIR,
+    USE_PLAYER_DB,
 )
 from src.draft_manager.draft_state import DraftState, LeagueConfig
 
@@ -125,7 +128,26 @@ class DraftInitializer:
             raise ValueError(f"Roster slots missing required positions: {missing}")
 
     def _load_player_data(self, data_year: int) -> Dict[str, Dict]:
-        """Load player projections from processed JSON."""
+        """Load player projections, trying the distributed DB first then JSON fallback."""
+        if USE_PLAYER_DB:
+            from src.data_pipeline.player_db_client import (
+                PlayerDatabaseClient,
+                PlayerDataNotFoundError,
+                PlayerDBConnectionError,
+            )
+
+            try:
+                with PlayerDatabaseClient(PLAYER_DB_URL, PLAYER_DB_API_KEY) as client:
+                    return client.fetch_season(data_year)
+            except PlayerDataNotFoundError:
+                logger.warning("Season %d not found in player DB; falling back to JSON.", data_year)
+            except PlayerDBConnectionError as exc:
+                logger.warning("Player DB unreachable (%s); falling back to JSON.", exc)
+
+        return self._load_from_json(data_year)
+
+    def _load_from_json(self, data_year: int) -> Dict[str, Dict]:
+        """Load player projections from the processed JSON file."""
         year_file = self.processed_data_dir / f"players_{data_year}.json"
 
         if not year_file.exists():
@@ -146,7 +168,7 @@ class DraftInitializer:
                 "Re-run data pipeline to regenerate."
             ) from e
 
-        logger.info("Loaded %d players for %d season", len(player_data), data_year)
+        logger.info("Loaded %d players for %d season from JSON.", len(player_data), data_year)
         return player_data
 
     @staticmethod

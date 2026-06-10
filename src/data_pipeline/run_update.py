@@ -22,6 +22,7 @@ from src.data_pipeline.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
 from src.data_pipeline.ingestion import FantasyProsIngester
 from src.data_pipeline.transformation import DataTransformer
 from src.data_pipeline.vor_calculation import VORCalculator
+from src.draft_manager.config import PLAYER_DB_API_KEY, PLAYER_DB_URL, USE_PLAYER_DB
 from src.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,20 @@ def run_pipeline(
     if latest_link.exists() or latest_link.is_symlink():
         latest_link.unlink()
     latest_link.symlink_to(output_file.name)
+
+    # Load into distributed DB (opt-in via USE_PLAYER_DB=true)
+    if USE_PLAYER_DB:
+        from src.data_pipeline.player_db_client import (
+            PlayerDatabaseClient,
+            PlayerDBConnectionError,
+        )
+
+        try:
+            with PlayerDatabaseClient(PLAYER_DB_URL, PLAYER_DB_API_KEY) as db:
+                db.ensure_tables()
+                db.load_season(players_list, output_data["metadata"], season=year)
+        except PlayerDBConnectionError as exc:
+            logger.warning("Could not load season into player DB: %s", exc)
 
     # Summary
     pos_counts: dict[str, int] = {}
