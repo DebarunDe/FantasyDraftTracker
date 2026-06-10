@@ -131,18 +131,16 @@ class DraftInitializer:
         """Load player projections, trying the distributed DB first then JSON fallback."""
         if USE_PLAYER_DB:
             from src.data_pipeline.player_db_client import (
-                PlayerDBConnectionError,
-                PlayerDataNotFoundError,
                 PlayerDatabaseClient,
+                PlayerDataNotFoundError,
+                PlayerDBConnectionError,
             )
 
             try:
                 with PlayerDatabaseClient(PLAYER_DB_URL, PLAYER_DB_API_KEY) as client:
                     return client.fetch_season(data_year)
             except PlayerDataNotFoundError:
-                logger.warning(
-                    "Season %d not found in player DB; falling back to JSON.", data_year
-                )
+                logger.warning("Season %d not found in player DB; falling back to JSON.", data_year)
             except PlayerDBConnectionError as exc:
                 logger.warning("Player DB unreachable (%s); falling back to JSON.", exc)
 

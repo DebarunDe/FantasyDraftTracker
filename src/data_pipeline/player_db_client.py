@@ -19,8 +19,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_SCALE_PTS = 100   # 2 decimal places for projections / VOR
-_SCALE_STAT = 10   # 1 decimal place for raw stats
+_SCALE_PTS = 100  # 2 decimal places for projections / VOR
+_SCALE_STAT = 10  # 1 decimal place for raw stats
 
 # ---------------------------------------------------------------------------
 # Custom exceptions
@@ -42,57 +42,57 @@ class PlayerDataNotFoundError(Exception):
 _PLAYERS_TABLE = {
     "name": "players",
     "columns": [
-        {"name": "player_pk",           "type": "INT"},
-        {"name": "season",              "type": "INT"},
-        {"name": "player_id",           "type": "TEXT"},
-        {"name": "name",                "type": "TEXT"},
-        {"name": "position",            "type": "TEXT"},
-        {"name": "nfl_team",            "type": "TEXT"},
-        {"name": "bye_week",            "type": "INT"},
-        {"name": "tier",                "type": "INT"},
-        {"name": "overall_rank",        "type": "INT"},
-        {"name": "position_rank",       "type": "INT"},
-        {"name": "proj_standard_x100",  "type": "INT"},
-        {"name": "proj_half_ppr_x100",  "type": "INT"},
-        {"name": "proj_full_ppr_x100",  "type": "INT"},
-        {"name": "vor_standard_x100",   "type": "INT"},
-        {"name": "vor_half_ppr_x100",   "type": "INT"},
-        {"name": "vor_full_ppr_x100",   "type": "INT"},
+        {"name": "player_pk", "type": "INT"},
+        {"name": "season", "type": "INT"},
+        {"name": "player_id", "type": "TEXT"},
+        {"name": "name", "type": "TEXT"},
+        {"name": "position", "type": "TEXT"},
+        {"name": "nfl_team", "type": "TEXT"},
+        {"name": "bye_week", "type": "INT"},
+        {"name": "tier", "type": "INT"},
+        {"name": "overall_rank", "type": "INT"},
+        {"name": "position_rank", "type": "INT"},
+        {"name": "proj_standard_x100", "type": "INT"},
+        {"name": "proj_half_ppr_x100", "type": "INT"},
+        {"name": "proj_full_ppr_x100", "type": "INT"},
+        {"name": "vor_standard_x100", "type": "INT"},
+        {"name": "vor_half_ppr_x100", "type": "INT"},
+        {"name": "vor_full_ppr_x100", "type": "INT"},
     ],
 }
 
 _PLAYER_STATS_TABLE = {
     "name": "player_stats",
     "columns": [
-        {"name": "stat_pk",       "type": "INT"},
-        {"name": "player_pk",     "type": "INT"},
-        {"name": "season",        "type": "INT"},
-        {"name": "pass_att_x10",  "type": "INT"},
-        {"name": "pass_cmp_x10",  "type": "INT"},
-        {"name": "pass_yds_x10",  "type": "INT"},
-        {"name": "pass_td_x10",   "type": "INT"},
-        {"name": "pass_int_x10",  "type": "INT"},
-        {"name": "rush_att_x10",  "type": "INT"},
-        {"name": "rush_yds_x10",  "type": "INT"},
-        {"name": "rush_td_x10",   "type": "INT"},
-        {"name": "rec_x10",       "type": "INT"},
-        {"name": "rec_yds_x10",   "type": "INT"},
-        {"name": "rec_td_x10",    "type": "INT"},
-        {"name": "fl_x10",        "type": "INT"},
-        {"name": "fg_x10",        "type": "INT"},
-        {"name": "fga_x10",       "type": "INT"},
-        {"name": "xpt_x10",       "type": "INT"},
+        {"name": "stat_pk", "type": "INT"},
+        {"name": "player_pk", "type": "INT"},
+        {"name": "season", "type": "INT"},
+        {"name": "pass_att_x10", "type": "INT"},
+        {"name": "pass_cmp_x10", "type": "INT"},
+        {"name": "pass_yds_x10", "type": "INT"},
+        {"name": "pass_td_x10", "type": "INT"},
+        {"name": "pass_int_x10", "type": "INT"},
+        {"name": "rush_att_x10", "type": "INT"},
+        {"name": "rush_yds_x10", "type": "INT"},
+        {"name": "rush_td_x10", "type": "INT"},
+        {"name": "rec_x10", "type": "INT"},
+        {"name": "rec_yds_x10", "type": "INT"},
+        {"name": "rec_td_x10", "type": "INT"},
+        {"name": "fl_x10", "type": "INT"},
+        {"name": "fg_x10", "type": "INT"},
+        {"name": "fga_x10", "type": "INT"},
+        {"name": "xpt_x10", "type": "INT"},
     ],
 }
 
 _SEASONS_TABLE = {
     "name": "seasons",
     "columns": [
-        {"name": "season_pk",      "type": "INT"},
-        {"name": "season",         "type": "INT"},
-        {"name": "generated_at",   "type": "TEXT"},
-        {"name": "source",         "type": "TEXT"},
-        {"name": "total_players",  "type": "INT"},
+        {"name": "season_pk", "type": "INT"},
+        {"name": "season", "type": "INT"},
+        {"name": "generated_at", "type": "TEXT"},
+        {"name": "source", "type": "TEXT"},
+        {"name": "total_players", "type": "INT"},
     ],
 }
 
@@ -189,22 +189,22 @@ class PlayerDatabaseClient:
             "/tables/players/rows",
             {
                 "values": {
-                    "player_pk":          pk,
-                    "season":             season,
-                    "player_id":          player.get("player_id") or "",
-                    "name":               player.get("name") or "",
-                    "position":           player.get("position") or "",
-                    "nfl_team":           player.get("team") or "",
-                    "bye_week":           player.get("bye_week") or 0,
-                    "tier":               player.get("tier") or 0,
-                    "overall_rank":       player.get("overall_rank") or 0,
-                    "position_rank":      player.get("position_rank") or 0,
+                    "player_pk": pk,
+                    "season": season,
+                    "player_id": player.get("player_id") or "",
+                    "name": player.get("name") or "",
+                    "position": player.get("position") or "",
+                    "nfl_team": player.get("team") or "",
+                    "bye_week": player.get("bye_week") or 0,
+                    "tier": player.get("tier") or 0,
+                    "overall_rank": player.get("overall_rank") or 0,
+                    "position_rank": player.get("position_rank") or 0,
                     "proj_standard_x100": _enc(proj.get("standard", 0.0), _SCALE_PTS),
                     "proj_half_ppr_x100": _enc(proj.get("half_ppr", 0.0), _SCALE_PTS),
                     "proj_full_ppr_x100": _enc(proj.get("full_ppr", 0.0), _SCALE_PTS),
-                    "vor_standard_x100":  _enc(vor.get("standard", 0.0), _SCALE_PTS),
-                    "vor_half_ppr_x100":  _enc(vor.get("half_ppr", 0.0), _SCALE_PTS),
-                    "vor_full_ppr_x100":  _enc(vor.get("full_ppr", 0.0), _SCALE_PTS),
+                    "vor_standard_x100": _enc(vor.get("standard", 0.0), _SCALE_PTS),
+                    "vor_half_ppr_x100": _enc(vor.get("half_ppr", 0.0), _SCALE_PTS),
+                    "vor_full_ppr_x100": _enc(vor.get("full_ppr", 0.0), _SCALE_PTS),
                 }
             },
         )
@@ -215,39 +215,37 @@ class PlayerDatabaseClient:
             "/tables/player_stats/rows",
             {
                 "values": {
-                    "stat_pk":      pk,
-                    "player_pk":    pk,
-                    "season":       season,
+                    "stat_pk": pk,
+                    "player_pk": pk,
+                    "season": season,
                     "pass_att_x10": _enc(s.get("pass_att", 0.0), _SCALE_STAT),
                     "pass_cmp_x10": _enc(s.get("pass_cmp", 0.0), _SCALE_STAT),
                     "pass_yds_x10": _enc(s.get("pass_yds", 0.0), _SCALE_STAT),
-                    "pass_td_x10":  _enc(s.get("pass_td", 0.0), _SCALE_STAT),
+                    "pass_td_x10": _enc(s.get("pass_td", 0.0), _SCALE_STAT),
                     "pass_int_x10": _enc(s.get("pass_int", 0.0), _SCALE_STAT),
                     "rush_att_x10": _enc(s.get("rush_att", 0.0), _SCALE_STAT),
                     "rush_yds_x10": _enc(s.get("rush_yds", 0.0), _SCALE_STAT),
-                    "rush_td_x10":  _enc(s.get("rush_td", 0.0), _SCALE_STAT),
-                    "rec_x10":      _enc(s.get("rec", 0.0), _SCALE_STAT),
-                    "rec_yds_x10":  _enc(s.get("rec_yds", 0.0), _SCALE_STAT),
-                    "rec_td_x10":   _enc(s.get("rec_td", 0.0), _SCALE_STAT),
-                    "fl_x10":       _enc(s.get("fl", 0.0), _SCALE_STAT),
-                    "fg_x10":       _enc(s.get("fg", 0.0), _SCALE_STAT),
-                    "fga_x10":      _enc(s.get("fga", 0.0), _SCALE_STAT),
-                    "xpt_x10":      _enc(s.get("xpt", 0.0), _SCALE_STAT),
+                    "rush_td_x10": _enc(s.get("rush_td", 0.0), _SCALE_STAT),
+                    "rec_x10": _enc(s.get("rec", 0.0), _SCALE_STAT),
+                    "rec_yds_x10": _enc(s.get("rec_yds", 0.0), _SCALE_STAT),
+                    "rec_td_x10": _enc(s.get("rec_td", 0.0), _SCALE_STAT),
+                    "fl_x10": _enc(s.get("fl", 0.0), _SCALE_STAT),
+                    "fg_x10": _enc(s.get("fg", 0.0), _SCALE_STAT),
+                    "fga_x10": _enc(s.get("fga", 0.0), _SCALE_STAT),
+                    "xpt_x10": _enc(s.get("xpt", 0.0), _SCALE_STAT),
                 }
             },
         )
 
-    def _insert_season_sentinel(
-        self, season: int, metadata: dict, total_players: int
-    ) -> None:
+    def _insert_season_sentinel(self, season: int, metadata: dict, total_players: int) -> None:
         self._post(
             "/tables/seasons/rows",
             {
                 "values": {
-                    "season_pk":     season,
-                    "season":        season,
-                    "generated_at":  metadata.get("generated_at", ""),
-                    "source":        metadata.get("source", "FantasyPros"),
+                    "season_pk": season,
+                    "season": season,
+                    "generated_at": metadata.get("generated_at", ""),
+                    "source": metadata.get("source", "FantasyPros"),
                     "total_players": total_players,
                 }
             },
@@ -288,9 +286,7 @@ class PlayerDatabaseClient:
         player_rows = self._get(f"/tables/players/rows?where=season={season}")
         stats_rows = self._get(f"/tables/player_stats/rows?where=season={season}")
 
-        stats_by_pk: dict[int, dict] = {
-            row["player_pk"]: row for row in stats_rows.get("rows", [])
-        }
+        stats_by_pk: dict[int, dict] = {row["player_pk"]: row for row in stats_rows.get("rows", [])}
 
         result: dict[str, dict] = {}
         for row in player_rows.get("rows", []):
@@ -299,9 +295,7 @@ class PlayerDatabaseClient:
             player = _reconstruct_player(row, stats)
             result[player["player_id"]] = player
 
-        logger.info(
-            "Fetched %d players for season %d from DB.", len(result), season
-        )
+        logger.info("Fetched %d players for season %d from DB.", len(result), season)
         return result
 
     # ------------------------------------------------------------------
@@ -313,9 +307,7 @@ class PlayerDatabaseClient:
         try:
             resp = self._client.get(url)
         except httpx.RequestError as exc:
-            raise PlayerDBConnectionError(
-                f"Cannot reach player DB at {url}: {exc}"
-            ) from exc
+            raise PlayerDBConnectionError(f"Cannot reach player DB at {url}: {exc}") from exc
         if resp.status_code >= 500:
             raise PlayerDBConnectionError(
                 f"Player DB returned {resp.status_code} for GET {path}: {resp.text}"
@@ -328,9 +320,7 @@ class PlayerDatabaseClient:
         try:
             resp = self._client.post(url, json=body)
         except httpx.RequestError as exc:
-            raise PlayerDBConnectionError(
-                f"Cannot reach player DB at {url}: {exc}"
-            ) from exc
+            raise PlayerDBConnectionError(f"Cannot reach player DB at {url}: {exc}") from exc
         if resp.status_code >= 500:
             raise PlayerDBConnectionError(
                 f"Player DB returned {resp.status_code} for POST {path}: {resp.text}"
@@ -370,30 +360,30 @@ def _dec(value: int, scale: int) -> float:
 def _reconstruct_player(player_row: dict, stats_row: dict) -> dict:
     """Rebuild the nested player dict that DraftState expects."""
     return {
-        "player_id":    player_row["player_id"],
-        "name":         player_row["name"],
-        "position":     player_row["position"],
-        "team":         player_row["nfl_team"],
-        "bye_week":     player_row["bye_week"] or None,
-        "tier":         player_row["tier"] or None,
+        "player_id": player_row["player_id"],
+        "name": player_row["name"],
+        "position": player_row["position"],
+        "team": player_row["nfl_team"],
+        "bye_week": player_row["bye_week"] or None,
+        "tier": player_row["tier"] or None,
         "overall_rank": player_row["overall_rank"] or None,
         "position_rank": player_row["position_rank"] or None,
         "stats": {
             "pass_att": _dec(stats_row.get("pass_att_x10", 0), _SCALE_STAT),
             "pass_cmp": _dec(stats_row.get("pass_cmp_x10", 0), _SCALE_STAT),
             "pass_yds": _dec(stats_row.get("pass_yds_x10", 0), _SCALE_STAT),
-            "pass_td":  _dec(stats_row.get("pass_td_x10", 0), _SCALE_STAT),
+            "pass_td": _dec(stats_row.get("pass_td_x10", 0), _SCALE_STAT),
             "pass_int": _dec(stats_row.get("pass_int_x10", 0), _SCALE_STAT),
             "rush_att": _dec(stats_row.get("rush_att_x10", 0), _SCALE_STAT),
             "rush_yds": _dec(stats_row.get("rush_yds_x10", 0), _SCALE_STAT),
-            "rush_td":  _dec(stats_row.get("rush_td_x10", 0), _SCALE_STAT),
-            "rec":      _dec(stats_row.get("rec_x10", 0), _SCALE_STAT),
-            "rec_yds":  _dec(stats_row.get("rec_yds_x10", 0), _SCALE_STAT),
-            "rec_td":   _dec(stats_row.get("rec_td_x10", 0), _SCALE_STAT),
-            "fl":       _dec(stats_row.get("fl_x10", 0), _SCALE_STAT),
-            "fg":       _dec(stats_row.get("fg_x10", 0), _SCALE_STAT),
-            "fga":      _dec(stats_row.get("fga_x10", 0), _SCALE_STAT),
-            "xpt":      _dec(stats_row.get("xpt_x10", 0), _SCALE_STAT),
+            "rush_td": _dec(stats_row.get("rush_td_x10", 0), _SCALE_STAT),
+            "rec": _dec(stats_row.get("rec_x10", 0), _SCALE_STAT),
+            "rec_yds": _dec(stats_row.get("rec_yds_x10", 0), _SCALE_STAT),
+            "rec_td": _dec(stats_row.get("rec_td_x10", 0), _SCALE_STAT),
+            "fl": _dec(stats_row.get("fl_x10", 0), _SCALE_STAT),
+            "fg": _dec(stats_row.get("fg_x10", 0), _SCALE_STAT),
+            "fga": _dec(stats_row.get("fga_x10", 0), _SCALE_STAT),
+            "xpt": _dec(stats_row.get("xpt_x10", 0), _SCALE_STAT),
         },
         "projections": {
             "standard": _dec(player_row.get("proj_standard_x100", 0), _SCALE_PTS),

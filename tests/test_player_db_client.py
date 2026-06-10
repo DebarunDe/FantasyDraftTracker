@@ -1,19 +1,18 @@
 """Tests for PlayerDatabaseClient (no live DB required — uses mock HTTP)."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.data_pipeline.player_db_client import (
-    PlayerDBConnectionError,
-    PlayerDataNotFoundError,
     PlayerDatabaseClient,
+    PlayerDataNotFoundError,
+    PlayerDBConnectionError,
     _dec,
     _enc,
     _player_pk,
     _reconstruct_player,
 )
-
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -309,9 +308,19 @@ class TestFetchSeason:
         result = client.fetch_season(2025)
         p = result["player_0"]
 
-        for key in ("player_id", "name", "position", "team", "bye_week",
-                    "tier", "overall_rank", "position_rank",
-                    "stats", "projections", "baseline_vor"):
+        for key in (
+            "player_id",
+            "name",
+            "position",
+            "team",
+            "bye_week",
+            "tier",
+            "overall_rank",
+            "position_rank",
+            "stats",
+            "projections",
+            "baseline_vor",
+        ):
             assert key in p, f"Missing key: {key}"
 
     def test_raises_when_season_not_found(self):
@@ -362,11 +371,26 @@ class TestLoadSeason:
                 "position_rank": 1,
                 "projections": {"standard": 300.0, "half_ppr": 300.0, "full_ppr": 300.0},
                 "baseline_vor": {"standard": 50.0, "half_ppr": 50.0, "full_ppr": 50.0},
-                "stats": {k: 0.0 for k in (
-                    "pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int",
-                    "rush_att", "rush_yds", "rush_td", "rec", "rec_yds",
-                    "rec_td", "fl", "fg", "fga", "xpt"
-                )},
+                "stats": {
+                    k: 0.0
+                    for k in (
+                        "pass_att",
+                        "pass_cmp",
+                        "pass_yds",
+                        "pass_td",
+                        "pass_int",
+                        "rush_att",
+                        "rush_yds",
+                        "rush_td",
+                        "rec",
+                        "rec_yds",
+                        "rec_td",
+                        "fl",
+                        "fg",
+                        "fga",
+                        "xpt",
+                    )
+                },
             }
         ]
         metadata = {"generated_at": "2025-01-01T00:00:00Z", "source": "FantasyPros"}
@@ -383,15 +407,36 @@ class TestLoadSeason:
         client = _make_client(http)
         players = [
             {
-                "player_id": "p1", "name": "P1", "position": "QB", "team": "BUF",
-                "bye_week": 7, "tier": 1, "overall_rank": 1, "position_rank": 1,
+                "player_id": "p1",
+                "name": "P1",
+                "position": "QB",
+                "team": "BUF",
+                "bye_week": 7,
+                "tier": 1,
+                "overall_rank": 1,
+                "position_rank": 1,
                 "projections": {"standard": 0.0, "half_ppr": 0.0, "full_ppr": 0.0},
                 "baseline_vor": {"standard": 0.0, "half_ppr": 0.0, "full_ppr": 0.0},
-                "stats": {k: 0.0 for k in (
-                    "pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int",
-                    "rush_att", "rush_yds", "rush_td", "rec", "rec_yds",
-                    "rec_td", "fl", "fg", "fga", "xpt"
-                )},
+                "stats": {
+                    k: 0.0
+                    for k in (
+                        "pass_att",
+                        "pass_cmp",
+                        "pass_yds",
+                        "pass_td",
+                        "pass_int",
+                        "rush_att",
+                        "rush_yds",
+                        "rush_td",
+                        "rec",
+                        "rec_yds",
+                        "rec_td",
+                        "fl",
+                        "fg",
+                        "fga",
+                        "xpt",
+                    )
+                },
             }
         ]
         client.load_season(players, {}, season=2025)

@@ -192,8 +192,8 @@ def run_pipeline(
     # Load into distributed DB (opt-in via USE_PLAYER_DB=true)
     if USE_PLAYER_DB:
         from src.data_pipeline.player_db_client import (
-            PlayerDBConnectionError,
             PlayerDatabaseClient,
+            PlayerDBConnectionError,
         )
 
         try:
