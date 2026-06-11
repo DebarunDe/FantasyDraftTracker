@@ -36,6 +36,7 @@ mkdir -p "$DATA_DIR"
 
 echo "Starting player DB on http://localhost:${HTTP_PORT}  (data: ${DATA_DIR}/players.bin)"
 exec "$DB_BINARY" \
+  -id        1 \
   -db        "${DATA_DIR}/players.bin" \
   -http-port "${HTTP_PORT}" \
   -api-keys  "${API_KEY}"
